@@ -1,8 +1,8 @@
-# งานที่ต้องดำเนินการ
+# งานแก้ไขให้ตรงต้นฉบับ
 
-- [x] ตรวจสอบว่าหัวข้อบนสุดของหน้าเว็บยังคงอยู่ใน `client/src/pages/Home.tsx`
-- [x] ตรวจสอบโครงสร้างไฟล์ที่แยกแล้ว ได้แก่ JSX, CSS, metadata และ asset references
-- [x] รัน type-check และ production build
-- [ ] บันทึก checkpoint เวอร์ชันล่าสุด
-- [ ] push โค้ดขึ้น GitHub repository `JntnCH/Installment-payment`
-- [ ] สรุปขั้นตอน publish ให้ผู้ใช้กด Publish ใน Management UI
+- [x] ตรวจสอบโครงสร้าง HTML, CSS, JavaScript และฟังก์ชันทั้งหมดจาก `/home/ubuntu/upload/index.html`
+- [x] เปลี่ยนหน้า React ที่ออกแบบใหม่เป็นเวอร์ชัน faithful ต่อหน้าตาต้นฉบับ
+- [x] แยก CSS และ JavaScript โดยไม่เปลี่ยนข้อความ สี layout และ module หลัก
+- [x] ทดสอบ type-check, build และตรวจภาพหน้าเว็บเทียบต้นฉบับ
+- [ ] บันทึก checkpoint เวอร์ชัน faithful
+- [ ] push เวอร์ชัน faithful ขึ้น GitHub
