@@ -32,4 +32,14 @@
 - [x] สร้าง Bot Dashboard แยกการ์ดเช็คยอดกับสรุปรายเดือน
 - [x] เพิ่ม Intent Console สำหรับรายรับ รายจ่าย ซื้อ ขาย AI Analyst และ OCR
 - [x] ทดสอบ API, TypeScript, production build และ responsive UI
-- [ ] บันทึก checkpoint พร้อมคู่มือ environment และการเชื่อม backend
+- [x] บันทึก checkpoint พร้อมคู่มือ environment และการเชื่อม backend
+
+## Individual debtor-creditor ledger sync
+
+- [x] กำหนด schema สำหรับคู่สัญญา สัญญา และธุรกรรมพร้อม test fixtures
+- [x] เพิ่ม backend APIs สำหรับรายชื่อลูกหนี้/เจ้าหนี้ สัญญา และกำหนดชำระเฉพาะสัญญา
+- [x] ทำให้ Dialogflow และ operations เขียน partyId/contractId อย่างปลอดภัย
+- [x] สร้าง individual ledger, contract selector และตารางกำหนดชำระเฉพาะธุรกรรมบน frontend
+- [x] เชื่อม API, refresh หลังบันทึก และตรวจสอบข้อมูลใหม่จาก backend
+- [x] ทดสอบ isolation, error states, responsive UI และจัดทำคู่มือตั้งค่า
+- [ ] บันทึก checkpoint ของ frontend หลังตรวจรับ
