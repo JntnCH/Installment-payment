@@ -50,4 +50,4 @@
 - [x] เพิ่มตัวกรองสถานะและแผงสรุปการแจ้งเตือนใน Individual Ledger
 - [x] ตรวจสอบตรรกะสำหรับกรณีเลยกำหนด วันนี้ ภายใน 3 วัน และชำระแล้วผ่าน TypeScript check และ production build
 - [x] ตรวจ responsive UI บนเดสก์ท็อปและมือถือ
-- [ ] สร้าง checkpoint, เผยแพร่ และซิงก์โค้ดขึ้น GitHub
+- [x] สร้าง checkpoint, เผยแพร่ และซิงก์โค้ดขึ้น GitHub
