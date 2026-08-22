@@ -42,4 +42,12 @@
 - [x] สร้าง individual ledger, contract selector และตารางกำหนดชำระเฉพาะธุรกรรมบน frontend
 - [x] เชื่อม API, refresh หลังบันทึก และตรวจสอบข้อมูลใหม่จาก backend
 - [x] ทดสอบ isolation, error states, responsive UI และจัดทำคู่มือตั้งค่า
-- [ ] บันทึก checkpoint ของ frontend หลังตรวจรับ
+- [x] บันทึก checkpoint ของ frontend หลังตรวจรับ
+
+## Delinquency status and due-date alerts
+
+- [x] กำหนดเกณฑ์สถานะตรงเวลา ใกล้ครบกำหนด และค้างชำระจากกำหนดชำระเฉพาะสัญญา
+- [x] เพิ่มตัวกรองสถานะและแผงสรุปการแจ้งเตือนใน Individual Ledger
+- [x] ตรวจสอบตรรกะสำหรับกรณีเลยกำหนด วันนี้ ภายใน 3 วัน และชำระแล้วผ่าน TypeScript check และ production build
+- [x] ตรวจ responsive UI บนเดสก์ท็อปและมือถือ
+- [ ] สร้าง checkpoint, เผยแพร่ และซิงก์โค้ดขึ้น GitHub
