@@ -69,3 +69,10 @@ Contemporary editorial dashboard ผสม visual language ของสมุด
 
 ### Signature Brand Color
 **Amber Seal — #D99A35** เป็นสีประจำแบรนด์ ใช้ในจุดที่ผู้ใช้ต้องลงมือทำและจุดคั่นสำคัญของ ledger โดยไม่ใช้เป็น gradient หรือเติมเต็มทุกองค์ประกอบ
+
+## Style Decisions
+
+- ใช้ลำดับชั้นตัวอักษรแบบ editorial ledger: หัวข้อภาษาไทยใช้ serif ที่มีน้ำหนักและจังหวะชัด, metadata ใช้ monospace แบบ archival และจำนวนเงินใช้ tabular figures เพื่อให้ตัวเลขเป็นจุดอ่านแรก
+- หัวข้อสำคัญและ Intent cards ต้องสื่อสารความเป็นเอกสารด้วยเส้น ruled line, stamped label, เส้นหมึก navy และ amber seal ก่อนพึ่งพา card ทรงโค้งทั่วไป
+- สัญลักษณ์ตรา ledger แบบหน้าสมุดซ้อนและรอยตัด amber เป็นภาษาภาพหลักของระบบ และควรสะท้อนอย่างละเอียดผ่าน headers, divider และ action surfaces
+- ภาพประกอบต้องถูกแต่งให้อบอุ่นแบบเอกสาร/สมุดบัญชีและใช้เป็นหลักฐานประกอบ ไม่ใช้ภาพ stock สำนักงานหรือการเงินทั่วไป
