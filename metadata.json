@@ -1,6 +1,6 @@
 {
   "name": "Installment Payment · Bot Dashboard",
-  "description": "ระบบจัดการผ่อนชำระและ Bot Dashboard สำหรับเช็คยอดและสรุปรายเดือน",
+  "description": "ระบบจัดการผ่อนชำระ เงินกู้นอกระบบ คำนวณดอกเบี้ยอัตโนมัติ และเชื่อมต่อ Google Sheets",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

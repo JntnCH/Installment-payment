@@ -92,6 +92,35 @@ export const transactionUpdateInputSchema = z.object({
   note: z.string().trim().max(2_000).optional(),
 }).refine(input => Object.keys(input).some(key => key !== "id"), "โปรดระบุข้อมูลที่ต้องการแก้ไข");
 
+export const webhookSyncInputSchema = z.object({
+  webhookUrl: z.string().trim().url("โปรดระบุ URL ของ Google Apps Script หรือ Webhook ที่ถูกต้อง"),
+  syncTarget: z.enum(["all", "summary", "schedules", "parties"]).default("all"),
+});
+
+export const batchScheduleGenerateInputSchema = z.object({
+  partyId: z.string().trim().min(1).max(64),
+  contractTitle: z.string().trim().min(1).max(255),
+  loanType: z.enum(["daily_informal", "floating_interest", "flat_installment", "effective_amortization"]),
+  principal: z.number().finite().positive(),
+  interestRate: z.number().finite().min(0),
+  installmentCount: z.number().int().positive().max(365),
+  startDate: isoDateSchema,
+  frequency: z.enum(["daily", "weekly", "biweekly", "monthly"]).default("monthly"),
+  skipSundays: z.boolean().optional().default(false),
+  feeAmount: z.number().finite().min(0).optional().default(0),
+  firstDeductAmount: z.number().finite().min(0).optional().default(0),
+});
+
+export const dialogflowServiceSchema = z.object({
+  endpointUrl: z.string().trim().url("โปรดระบุ URL ของ Dialogflow Service ให้ถูกต้อง"),
+  method: z.enum(["GET", "POST", "PUT"]).default("GET"),
+  path: z.string().trim().default(""),
+  authToken: z.string().trim().optional(),
+  payload: z.any().optional(),
+});
+
+export type DialogflowServiceInput = z.infer<typeof dialogflowServiceSchema>;
+
 export type PartyInput = z.infer<typeof partyInputSchema>;
 export type ContractInput = z.infer<typeof contractInputSchema>;
 export type TransactionInput = z.infer<typeof transactionInputSchema>;
@@ -100,3 +129,5 @@ export type PartyUpdateInput = z.infer<typeof partyUpdateInputSchema>;
 export type ContractUpdateInput = z.infer<typeof contractUpdateInputSchema>;
 export type ScheduleUpdateInput = z.infer<typeof scheduleUpdateInputSchema>;
 export type TransactionUpdateInput = z.infer<typeof transactionUpdateInputSchema>;
+export type WebhookSyncInput = z.infer<typeof webhookSyncInputSchema>;
+export type BatchScheduleGenerateInput = z.infer<typeof batchScheduleGenerateInputSchema>;

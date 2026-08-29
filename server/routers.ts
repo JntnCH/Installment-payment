@@ -1,13 +1,12 @@
 import { COOKIE_NAME } from "@shared/const";
 import { TRPCError } from "@trpc/server";
-import { contractInputSchema, contractUpdateInputSchema, ledgerIdInputSchema, partyInputSchema, partyRoleSchema, partyUpdateInputSchema, schedulePaymentInputSchema, scheduleUpdateInputSchema, transactionInputSchema, transactionUpdateInputSchema } from "../shared/ledgerSchemas";
-import { createLedgerContract, createLedgerParty, createLedgerTransaction, getContractLedger, getPartyLedger, listLedgerParties, markSchedulePaid, updateLedgerContract, updateLedgerParty, updateLedgerSchedule, updateLedgerTransaction } from "./ledger";
+import { contractInputSchema, contractUpdateInputSchema, dialogflowServiceSchema, ledgerIdInputSchema, partyInputSchema, partyRoleSchema, partyUpdateInputSchema, schedulePaymentInputSchema, scheduleUpdateInputSchema, transactionInputSchema, transactionUpdateInputSchema, webhookSyncInputSchema } from "../shared/ledgerSchemas";
+import { callDialogflowServiceEndpoint, createLedgerContract, createLedgerParty, createLedgerTransaction, deleteLedgerContract, deleteLedgerParty, deleteLedgerTransaction, exportAllData, getContractLedger, getDashboardStats, getPartyLedger, listLedgerParties, markSchedulePaid, syncToGoogleSheetsWebhook, updateLedgerContract, updateLedgerParty, updateLedgerSchedule, updateLedgerTransaction } from "./ledger";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
@@ -20,6 +19,12 @@ export const appRouter = router({
     }),
   }),
   ledger: router({
+    getStats: protectedProcedure.query(({ ctx }) => getDashboardStats(ctx.user.id)),
+    exportData: protectedProcedure.query(({ ctx }) => exportAllData(ctx.user.id)),
+    syncGoogleSheets: protectedProcedure.input(webhookSyncInputSchema).mutation(({ ctx, input }) => syncToGoogleSheetsWebhook(ctx.user.id, input.webhookUrl, input.syncTarget)),
+    callDialogflowService: publicProcedure.input(dialogflowServiceSchema).mutation(async ({ input }) => {
+      return callDialogflowServiceEndpoint(input);
+    }),
     listParties: protectedProcedure.input(partyRoleSchema.optional()).query(({ ctx, input }) => listLedgerParties(ctx.user.id, input)),
     getParty: protectedProcedure.input(ledgerIdInputSchema).query(async ({ ctx, input }) => {
       const result = await getPartyLedger(ctx.user.id, input.id);
@@ -39,7 +44,11 @@ export const appRouter = router({
     updateContract: protectedProcedure.input(contractUpdateInputSchema).mutation(({ ctx, input }) => updateLedgerContract(ctx.user.id, input)),
     updateSchedule: protectedProcedure.input(scheduleUpdateInputSchema).mutation(({ ctx, input }) => updateLedgerSchedule(ctx.user.id, input)),
     updateTransaction: protectedProcedure.input(transactionUpdateInputSchema).mutation(({ ctx, input }) => updateLedgerTransaction(ctx.user.id, input)),
+    deleteParty: protectedProcedure.input(ledgerIdInputSchema).mutation(({ ctx, input }) => deleteLedgerParty(ctx.user.id, input.id)),
+    deleteContract: protectedProcedure.input(ledgerIdInputSchema).mutation(({ ctx, input }) => deleteLedgerContract(ctx.user.id, input.id)),
+    deleteTransaction: protectedProcedure.input(ledgerIdInputSchema).mutation(({ ctx, input }) => deleteLedgerTransaction(ctx.user.id, input.id)),
   }),
 });
 
 export type AppRouter = typeof appRouter;
+

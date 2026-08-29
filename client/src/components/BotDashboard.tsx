@@ -37,20 +37,52 @@ type MonthlyData = { month: string; monthlyIncome: number; monthlyExpense: numbe
 type Intent = "income" | "expense" | "buy" | "sell" | "query" | "ocr" | null;
 
 const money = (amount: number) => new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB", minimumFractionDigits: 2 }).format(Number(amount || 0));
-const apiBase = (import.meta.env.VITE_BACKEND_API_URL || "").replace(/\/$/, "");
-
-async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBase}${path}`, init);
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || "ระบบหลังบ้านไม่สามารถตอบกลับได้");
-  return payload as T;
-}
 
 function IntentButton({ active, icon: Icon, label, caption, onClick }: { active: boolean; icon: typeof Bot; label: string; caption: string; onClick: () => void }) {
   return <button className={`intent-button ${active ? "is-selected" : ""}`} onClick={onClick}><Icon size={17} /><span><b>{label}</b><small>{caption}</small></span></button>;
 }
 
 export default function BotDashboard() {
+  const [customApiUrl, setCustomApiUrl] = useState<string>(() => {
+    return (
+      localStorage.getItem("bot_backend_url") ||
+      import.meta.env.VITE_BACKEND_API_URL ||
+      "https://income-expense-docker-274212739997.asia-southeast3.run.app"
+    );
+  });
+  const [authToken, setAuthToken] = useState<string>(() => {
+    return localStorage.getItem("bot_auth_token") || "";
+  });
+  const [showConfig, setShowConfig] = useState(false);
+
+  const apiBase = customApiUrl.replace(/\/$/, "");
+
+  const apiRequest = useCallback(
+    async <T,>(path: string, init?: RequestInit): Promise<T> => {
+      const headers: Record<string, string> = {
+        ...(init?.headers as Record<string, string>),
+      };
+      if (authToken) {
+        headers["Authorization"] = authToken.startsWith("Bearer ")
+          ? authToken
+          : `Bearer ${authToken}`;
+      }
+      const response = await fetch(`${apiBase}${path}`, {
+        ...init,
+        headers,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 403) {
+          throw new Error("403 Forbidden: Cloud Run ต้องการ Invoker Permission หรือ Bearer ID Token");
+        }
+        throw new Error(payload.error || `HTTP ${response.status}: ระบบหลังบ้านไม่สามารถตอบกลับได้`);
+      }
+      return payload as T;
+    },
+    [apiBase, authToken]
+  );
+
   const [balance, setBalance] = useState<BalanceData | null>(null);
   const [monthly, setMonthly] = useState<MonthlyData | null>(null);
   const [intent, setIntent] = useState<Intent>(null);
@@ -79,9 +111,17 @@ export default function BotDashboard() {
     const failure = balanceResult.status === "rejected" ? balanceResult.reason : monthlyResult.status === "rejected" ? monthlyResult.reason : null;
     if (failure) setError(failure instanceof Error ? failure.message : "ไม่สามารถโหลดข้อมูลจาก BotDashboard ได้");
     setIsLoading(false);
-  }, [disconnected]);
+  }, [disconnected, apiRequest]);
 
   useEffect(() => { void loadSummaries(); }, [loadSummaries]);
+
+  const saveConfig = (url: string, token: string) => {
+    setCustomApiUrl(url);
+    setAuthToken(token);
+    localStorage.setItem("bot_backend_url", url);
+    localStorage.setItem("bot_auth_token", token);
+    toast.success("บันทึกการตั้งค่า Backend URL แล้ว");
+  };
 
   const openIntent = (next: Intent) => { setIntent(next); setNotice(""); setError(""); };
   const runOperation = async (event: React.FormEvent) => {
@@ -122,7 +162,65 @@ export default function BotDashboard() {
       <div className={`connection-chip ${disconnected ? "is-offline" : ""}`}><i />{disconnected ? "รอเชื่อม Backend" : "เชื่อม Backend API"}</div>
     </div>
 
-    <div className="summary-toolbar"><div><b>ข้อมูลจาก {balance?.summarySheet || "BotDashboard"}</b><small>{balance?.formattedDate || "รอข้อมูลจาก Google Sheets"}</small></div><button className="refresh-button" onClick={() => void loadSummaries()} disabled={isLoading || disconnected}>{isLoading ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}รีเฟรชข้อมูล</button></div>
+    <div className="summary-toolbar">
+      <div>
+        <b>ข้อมูลจาก {balance?.summarySheet || "BotDashboard"}</b>
+        <small>{balance?.formattedDate || "รอข้อมูลจาก Google Sheets"}</small>
+        <span style={{ marginLeft: 8, fontSize: 11, opacity: 0.7, fontFamily: "monospace" }}>
+          ({customApiUrl})
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button
+          type="button"
+          className="refresh-button"
+          onClick={() => setShowConfig(!showConfig)}
+          style={{ background: showConfig ? "#2C2927" : undefined }}
+        >
+          <Bot size={16} />
+          {showConfig ? "ปิดตั้งค่า URL" : "ตั้งค่า Service URL"}
+        </button>
+        <button className="refresh-button" onClick={() => void loadSummaries()} disabled={isLoading || disconnected}>
+          {isLoading ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}
+          รีเฟรชข้อมูล
+        </button>
+      </div>
+    </div>
+
+    {showConfig && (
+      <div style={{ padding: 16, background: "rgba(0,0,0,0.04)", borderRadius: 12, marginBottom: 16, display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 12, alignItems: "flex-end" }}>
+        <div>
+          <label style={{ display: "block", fontSize: 11, fontWeight: "bold", marginBottom: 4 }}>Backend API URL (Cloud Run / Docker):</label>
+          <input
+            type="text"
+            value={customApiUrl}
+            onChange={(e) => setCustomApiUrl(e.target.value)}
+            placeholder="https://income-expense-docker-274212739997.asia-southeast3.run.app"
+            style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(0,0,0,0.15)", fontSize: 12, fontFamily: "monospace" }}
+          />
+        </div>
+        <div>
+          <label style={{ display: "block", fontSize: 11, fontWeight: "bold", marginBottom: 4 }}>Bearer ID Token (ถ้า Cloud Run ปิด Public):</label>
+          <input
+            type="password"
+            value={authToken}
+            onChange={(e) => setAuthToken(e.target.value)}
+            placeholder="Bearer token หรือเว้นว่าง"
+            style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(0,0,0,0.15)", fontSize: 12, fontFamily: "monospace" }}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            saveConfig(customApiUrl, authToken);
+            void loadSummaries();
+          }}
+          style={{ height: 36, padding: "0 16px", background: "#1C1917", color: "#fff", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "none" }}
+        >
+          บันทึก & รีเฟรช
+        </button>
+      </div>
+    )}
 
     {error && <div className="bot-alert"><b>การเชื่อมต่อยังไม่พร้อม</b><span>{error}</span>{disconnected && <code>VITE_BACKEND_API_URL=https://your-backend.example</code>}</div>}
 

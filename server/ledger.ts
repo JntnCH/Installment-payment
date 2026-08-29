@@ -1,3 +1,4 @@
+import axios from "axios";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import {
   contractPaymentSchedules,
@@ -748,3 +749,442 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
 
   return toScheduleTransaction(updated);
 }
+
+export async function deleteLedgerParty(ownerId: number, partyId: string) {
+  const db = await getDb();
+  if (db) {
+    await db.delete(parties).where(and(eq(parties.ownerId, ownerId), eq(parties.id, partyId)));
+    await db.delete(contracts).where(and(eq(contracts.ownerId, ownerId), eq(contracts.partyId, partyId)));
+    await db.delete(contractPaymentSchedules).where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.partyId, partyId)));
+    await db.delete(ledgerTransactions).where(and(eq(ledgerTransactions.ownerId, ownerId), eq(ledgerTransactions.partyId, partyId)));
+    return { success: true };
+  }
+
+  initializeMemoryStore(ownerId);
+  memoryParties.delete(partyId);
+  for (const [id, c] of Array.from(memoryContracts.entries())) {
+    if (c.partyId === partyId) memoryContracts.delete(id);
+  }
+  for (const [id, s] of Array.from(memorySchedules.entries())) {
+    if (s.partyId === partyId) memorySchedules.delete(id);
+  }
+  for (const [id, t] of Array.from(memoryTransactions.entries())) {
+    if (t.partyId === partyId) memoryTransactions.delete(id);
+  }
+  return { success: true };
+}
+
+export async function deleteLedgerContract(ownerId: number, contractId: string) {
+  const db = await getDb();
+  if (db) {
+    await db.delete(contracts).where(and(eq(contracts.ownerId, ownerId), eq(contracts.id, contractId)));
+    await db.delete(contractPaymentSchedules).where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.contractId, contractId)));
+    await db.delete(ledgerTransactions).where(and(eq(ledgerTransactions.ownerId, ownerId), eq(ledgerTransactions.contractId, contractId)));
+    return { success: true };
+  }
+
+  initializeMemoryStore(ownerId);
+  memoryContracts.delete(contractId);
+  for (const [id, s] of Array.from(memorySchedules.entries())) {
+    if (s.contractId === contractId) memorySchedules.delete(id);
+  }
+  for (const [id, t] of Array.from(memoryTransactions.entries())) {
+    if (t.contractId === contractId) memoryTransactions.delete(id);
+  }
+  return { success: true };
+}
+
+export async function deleteLedgerTransaction(ownerId: number, transactionId: string) {
+  const db = await getDb();
+  if (db) {
+    await db.delete(ledgerTransactions).where(and(eq(ledgerTransactions.ownerId, ownerId), eq(ledgerTransactions.id, transactionId)));
+    return { success: true };
+  }
+
+  initializeMemoryStore(ownerId);
+  memoryTransactions.delete(transactionId);
+  return { success: true };
+}
+
+export async function getDashboardStats(ownerId: number) {
+  const allParties = await listLedgerParties(ownerId);
+  const partyMap = new Map(allParties.map(p => [p.partyId, p]));
+
+  const db = await getDb();
+  let allContracts: ContractRow[] = [];
+  let allSchedules: ScheduleRow[] = [];
+  let allTransactions: TransactionRow[] = [];
+
+  if (db) {
+    allContracts = await db.select().from(contracts).where(eq(contracts.ownerId, ownerId));
+    allSchedules = await db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.ownerId, ownerId));
+    allTransactions = await db.select().from(ledgerTransactions).where(eq(ledgerTransactions.ownerId, ownerId));
+  } else {
+    initializeMemoryStore(ownerId);
+    allContracts = Array.from(memoryContracts.values()).filter(c => c.ownerId === ownerId);
+    allSchedules = Array.from(memorySchedules.values()).filter(s => s.ownerId === ownerId);
+    allTransactions = Array.from(memoryTransactions.values()).filter(t => t.ownerId === ownerId);
+  }
+
+  const contractMap = new Map(allContracts.map(c => [c.id, c]));
+
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  const todayMs = Date.parse(`${todayStr}T00:00:00+07:00`);
+
+  let totalPrincipal = 0;
+  let totalScheduled = 0;
+  let totalCollected = 0;
+  let totalOutstanding = 0;
+
+  for (const c of allContracts) {
+    totalPrincipal += asAmount(c.principal);
+  }
+
+  let overdueCount = 0;
+  let overdueAmount = 0;
+  let todayCount = 0;
+  let todayAmount = 0;
+  let soonCount = 0;
+  let soonAmount = 0;
+
+  const alerts: Array<{
+    id: string;
+    scheduleId: string;
+    partyId: string;
+    partyName: string;
+    contractId: string;
+    contractTitle: string;
+    installmentNo: number;
+    amount: number;
+    dueDate: string;
+    daysDiff: number;
+    status: "overdue" | "today" | "soon";
+  }> = [];
+
+  for (const s of allSchedules) {
+    const amount = asAmount(s.amount);
+    const paidAmount = asAmount(s.paidAmount);
+    totalScheduled += amount;
+    totalCollected += paidAmount;
+
+    if (s.status === "pending") {
+      const remainingOnSchedule = Math.max(0, amount - paidAmount);
+      totalOutstanding += remainingOnSchedule;
+
+      const due = asDate(s.dueDate);
+      if (due) {
+        const dueMs = Date.parse(`${due}T00:00:00+07:00`);
+        const daysDiff = Math.round((dueMs - todayMs) / 86_400_000);
+        const party = partyMap.get(s.partyId);
+        const contract = contractMap.get(s.contractId);
+
+        if (daysDiff < 0) {
+          overdueCount++;
+          overdueAmount += remainingOnSchedule;
+          alerts.push({
+            id: `alert-overdue-${s.id}`,
+            scheduleId: s.id,
+            partyId: s.partyId,
+            partyName: party?.displayName || "ไม่ระบุชื่อ",
+            contractId: s.contractId,
+            contractTitle: contract?.title || "สัญญาเงินกู้",
+            installmentNo: s.installmentNo,
+            amount: remainingOnSchedule,
+            dueDate: due,
+            daysDiff,
+            status: "overdue",
+          });
+        } else if (daysDiff === 0) {
+          todayCount++;
+          todayAmount += remainingOnSchedule;
+          alerts.push({
+            id: `alert-today-${s.id}`,
+            scheduleId: s.id,
+            partyId: s.partyId,
+            partyName: party?.displayName || "ไม่ระบุชื่อ",
+            contractId: s.contractId,
+            contractTitle: contract?.title || "สัญญาเงินกู้",
+            installmentNo: s.installmentNo,
+            amount: remainingOnSchedule,
+            dueDate: due,
+            daysDiff: 0,
+            status: "today",
+          });
+        } else if (daysDiff <= 3) {
+          soonCount++;
+          soonAmount += remainingOnSchedule;
+          alerts.push({
+            id: `alert-soon-${s.id}`,
+            scheduleId: s.id,
+            partyId: s.partyId,
+            partyName: party?.displayName || "ไม่ระบุชื่อ",
+            contractId: s.contractId,
+            contractTitle: contract?.title || "สัญญาเงินกู้",
+            installmentNo: s.installmentNo,
+            amount: remainingOnSchedule,
+            dueDate: due,
+            daysDiff,
+            status: "soon",
+          });
+        }
+      }
+    }
+  }
+
+  alerts.sort((a, b) => a.daysDiff - b.daysDiff);
+
+  const monthlyTimelineMap = new Map<string, { month: string; scheduled: number; collected: number; pending: number }>();
+  for (const s of allSchedules) {
+    const due = asDate(s.dueDate);
+    const monthKey = due ? due.slice(0, 7) : "ไม่ระบุ";
+    const current = monthlyTimelineMap.get(monthKey) || { month: monthKey, scheduled: 0, collected: 0, pending: 0 };
+    const amt = asAmount(s.amount);
+    const paid = asAmount(s.paidAmount);
+    current.scheduled += amt;
+    current.collected += paid;
+    if (s.status === "pending") {
+      current.pending += Math.max(0, amt - paid);
+    }
+    monthlyTimelineMap.set(monthKey, current);
+  }
+
+  const monthlyTimeline = Array.from(monthlyTimelineMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+
+  return {
+    debtorCount: allParties.filter(p => p.role === "debtor").length,
+    creditorCount: allParties.filter(p => p.role === "creditor").length,
+    totalParties: allParties.length,
+    totalContracts: allContracts.length,
+    activeContracts: allContracts.filter(c => c.status === "active").length,
+    totalPrincipal,
+    totalScheduled,
+    totalCollected,
+    totalOutstanding,
+    projectedInterest: Math.max(0, totalScheduled - totalPrincipal),
+    overdue: { count: overdueCount, amount: overdueAmount },
+    today: { count: todayCount, amount: todayAmount },
+    soon: { count: soonCount, amount: soonAmount },
+    alerts,
+    monthlyTimeline,
+    recentTransactions: allTransactions
+      .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
+      .slice(0, 10)
+      .map(toLedgerTransaction),
+  };
+}
+
+export async function exportAllData(ownerId: number) {
+  const allParties = await listLedgerParties(ownerId);
+  const partyMap = new Map(allParties.map(p => [p.partyId, p]));
+
+  const db = await getDb();
+  let allContracts: ContractRow[] = [];
+  let allSchedules: ScheduleRow[] = [];
+  let allTransactions: TransactionRow[] = [];
+
+  if (db) {
+    allContracts = await db.select().from(contracts).where(eq(contracts.ownerId, ownerId));
+    allSchedules = await db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.ownerId, ownerId));
+    allTransactions = await db.select().from(ledgerTransactions).where(eq(ledgerTransactions.ownerId, ownerId));
+  } else {
+    initializeMemoryStore(ownerId);
+    allContracts = Array.from(memoryContracts.values()).filter(c => c.ownerId === ownerId);
+    allSchedules = Array.from(memorySchedules.values()).filter(s => s.ownerId === ownerId);
+    allTransactions = Array.from(memoryTransactions.values()).filter(t => t.ownerId === ownerId);
+  }
+
+  const contractMap = new Map(allContracts.map(c => [c.id, c]));
+
+  const enrichedContracts = allContracts.map(c => {
+    const party = partyMap.get(c.partyId);
+    return {
+      contractId: c.id,
+      partyId: c.partyId,
+      customerName: party?.displayName || "—",
+      customerRole: party?.role || "debtor",
+      customerPhone: party?.phone || "—",
+      title: c.title,
+      principal: asAmount(c.principal),
+      interestRate: asAmount(c.interestRate),
+      installmentCount: c.installmentCount,
+      startDate: asDate(c.startDate),
+      status: c.status,
+    };
+  });
+
+  const enrichedSchedules = allSchedules.map(s => {
+    const party = partyMap.get(s.partyId);
+    const contract = contractMap.get(s.contractId);
+    return {
+      scheduleId: s.id,
+      partyName: party?.displayName || "—",
+      partyPhone: party?.phone || "—",
+      contractTitle: contract?.title || "—",
+      installmentNo: s.installmentNo,
+      dueDate: asDate(s.dueDate),
+      amount: asAmount(s.amount),
+      paidAmount: asAmount(s.paidAmount),
+      status: s.status,
+      paidAt: asTimestamp(s.paidAt),
+      note: s.note || "",
+    };
+  });
+
+  const enrichedTransactions = allTransactions.map(t => {
+    const party = partyMap.get(t.partyId);
+    const contract = t.contractId ? contractMap.get(t.contractId) : null;
+    return {
+      transactionId: t.id,
+      partyName: party?.displayName || "—",
+      contractTitle: contract?.title || "—",
+      type: t.type,
+      amount: asAmount(t.amount),
+      occurredAt: asTimestamp(t.occurredAt),
+      source: t.source,
+      note: t.note || "",
+    };
+  });
+
+  return {
+    exportedAt: new Date().toISOString(),
+    parties: allParties,
+    contracts: enrichedContracts,
+    schedules: enrichedSchedules,
+    transactions: enrichedTransactions,
+  };
+}
+
+export async function syncToGoogleSheetsWebhook(ownerId: number, webhookUrl: string, syncTarget: string = "all") {
+  const axios = (await import("axios")).default;
+  const payload = await exportAllData(ownerId);
+  const stats = await getDashboardStats(ownerId);
+
+  const requestBody = {
+    timestamp: new Date().toISOString(),
+    syncTarget,
+    stats: {
+      totalPrincipal: stats.totalPrincipal,
+      totalScheduled: stats.totalScheduled,
+      totalCollected: stats.totalCollected,
+      totalOutstanding: stats.totalOutstanding,
+      overdueCount: stats.overdue.count,
+      overdueAmount: stats.overdue.amount,
+      todayCount: stats.today.count,
+      todayAmount: stats.today.amount,
+    },
+    parties: payload.parties,
+    contracts: payload.contracts,
+    schedules: payload.schedules,
+    transactions: payload.transactions,
+  };
+
+  try {
+    const response = await axios.post(webhookUrl, requestBody, {
+      headers: { "Content-Type": "application/json" },
+      timeout: 15000,
+    });
+
+    return {
+      success: true,
+      statusCode: response.status,
+      message: "ซิงค์ข้อมูลกับ Google Sheet สำเร็จ",
+      dataLength: {
+        parties: payload.parties.length,
+        contracts: payload.contracts.length,
+        schedules: payload.schedules.length,
+      },
+    };
+  } catch (err: any) {
+    const errorMessage = err?.response?.data?.message || err?.message || "ไม่สามารถเชื่อมต่อกับ Google Apps Script Webhook ได้";
+    return {
+      success: false,
+      statusCode: err?.response?.status || 500,
+      message: `เกิดข้อผิดพลาดในการซิงค์: ${errorMessage}`,
+    };
+  }
+}
+
+/**
+ * Call or test Dialogflow Cloud Run / Webhook service
+ */
+export async function callDialogflowServiceEndpoint(params: {
+  endpointUrl: string;
+  method?: "GET" | "POST" | "PUT";
+  path?: string;
+  authToken?: string;
+  payload?: any;
+}) {
+  const method = params.method || "GET";
+  const baseUrl = params.endpointUrl.replace(/\/$/, "");
+  const subPath = params.path ? (params.path.startsWith("/") ? params.path : `/${params.path}`) : "";
+  const fullUrl = `${baseUrl}${subPath}`;
+
+  const headers: Record<string, string> = {
+    "User-Agent": "DialogflowIntegration/1.0",
+    Accept: "application/json, text/plain, */*",
+  };
+
+  if (params.payload && (method === "POST" || method === "PUT")) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  if (params.authToken) {
+    const cleanToken = params.authToken.startsWith("Bearer ")
+      ? params.authToken
+      : `Bearer ${params.authToken}`;
+    headers["Authorization"] = cleanToken;
+  }
+
+  const startTime = Date.now();
+
+  try {
+    const response = await axios({
+      method,
+      url: fullUrl,
+      headers,
+      data: params.payload,
+      timeout: 20000,
+      validateStatus: () => true, // Don't throw on 4xx/5xx so we can report status accurately
+    });
+
+    const elapsedMs = Date.now() - startTime;
+    const isOk = response.status >= 200 && response.status < 300;
+
+    let recommendation = "";
+    if (response.status === 403) {
+      recommendation =
+        "Google Cloud Run ส่งรหัส 403 Forbidden เนื่องจาก Service มีการเปิดระบบความปลอดภัย (Require Authentication). วิธีแก้ไข: ไปที่ GCP Console > Cloud Run > เลือก Service 'income-expense-docker' > แท็บ Security / Ingress > เลือก 'Allow unauthenticated invocations' หรือส่ง Bearer ID Token มาในคำขอ";
+    } else if (response.status === 404) {
+      recommendation =
+        `ไม่พบ Path (${subPath || "/"}) บนเซิร์ฟเวอร์ กรุณาตรวจสอบ Routing (เช่น /webhook, /api/summary/balance หรือ /)`;
+    } else if (isOk) {
+      recommendation = "เชื่อมต่อและรับข้อมูลจาก Dialogflow Service สำเร็จ!";
+    }
+
+    return {
+      success: isOk,
+      url: fullUrl,
+      method,
+      statusCode: response.status,
+      statusText: response.statusText,
+      elapsedMs,
+      contentType: response.headers["content-type"] || "",
+      data: response.data,
+      recommendation,
+    };
+  } catch (err: any) {
+    const elapsedMs = Date.now() - startTime;
+    return {
+      success: false,
+      url: fullUrl,
+      method,
+      statusCode: err?.response?.status || 0,
+      statusText: err?.message || "Network Error",
+      elapsedMs,
+      contentType: "",
+      data: err?.response?.data || null,
+      recommendation: `ไม่สามารถเชื่อมต่อไปยัง ${fullUrl}: ${err.message}`,
+    };
+  }
+}
+
