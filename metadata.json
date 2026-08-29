@@ -1,0 +1,6 @@
+{
+  "name": "Installment Payment · Bot Dashboard",
+  "description": "ระบบจัดการผ่อนชำระและ Bot Dashboard สำหรับเช็คยอดและสรุปรายเดือน",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

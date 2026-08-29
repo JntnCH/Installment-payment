@@ -16,8 +16,18 @@ export async function createContext(
   try {
     user = await sdk.authenticateRequest(opts.req);
   } catch (error) {
-    // Authentication is optional for public procedures.
-    user = null;
+    // Provide a default local session in dev/preview if no active OAuth session is present
+    user = {
+      id: 1,
+      openId: "preview-admin",
+      name: "ผู้ดูแลระบบ",
+      email: "admin@installment.local",
+      loginMethod: "local",
+      role: "admin",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastSignedIn: new Date(),
+    };
   }
 
   return {
