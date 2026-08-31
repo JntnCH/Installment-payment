@@ -36,6 +36,7 @@ interface LoanCalculatorProps {
 
 export default function LoanCalculator({ onContractCreated }: LoanCalculatorProps) {
   const [loanType, setLoanType] = useState<LoanType>("daily_informal");
+  const [myRole, setMyRole] = useState<"debtor" | "creditor">("debtor"); // default: ฉันเป็นลูกหนี้
   const [partyType, setPartyType] = useState<"existing" | "new">("existing");
   const [selectedPartyId, setSelectedPartyId] = useState<string>("");
   const [newPartyName, setNewPartyName] = useState("");
@@ -44,13 +45,16 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
   const [saveLoading, setSaveLoading] = useState(false);
 
   // Daily Informal Loan State
-  const [dailyPrincipal, setDailyPrincipal] = useState(10000);
-  const [dailyRate, setDailyRate] = useState(20);
-  const [dailyDays, setDailyDays] = useState(24);
-  const [dailyFee, setDailyFee] = useState(500);
-  const [dailyFirstDeduct, setDailyFirstDeduct] = useState(0);
+  const [dailyInputMode, setDailyInputMode] = useState<"by_payment" | "by_rate" | "by_actual_received">("by_payment");
+  const [dailyPrincipal, setDailyPrincipal] = useState(4000);
+  const [dailyInstallmentInput, setDailyInstallmentInput] = useState(200);
+  const [dailyRate, setDailyRate] = useState(25);
+  const [dailyDays, setDailyDays] = useState(25);
+  const [dailyFee, setDailyFee] = useState(250);
+  const [dailyFirstDeduct, setDailyFirstDeduct] = useState(200);
+  const [dailyActualReceived, setDailyActualReceived] = useState(3550);
   const [dailyStartDate, setDailyStartDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [dailySkipSunday, setDailySkipSunday] = useState(true);
+  const [dailySkipSunday, setDailySkipSunday] = useState(false);
 
   // Floating Interest Loan State
   const [floatingPrincipal, setFloatingPrincipal] = useState(20000);
@@ -77,12 +81,36 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
   const createContractMutation = trpc.ledger.createContract.useMutation();
   const utils = trpc.useUtils();
 
-  const parties = partiesQuery.data || [];
+  const allParties = partiesQuery.data || [];
+  // Filter parties by selected role (if myRole is debtor, we look for creditor parties, and vice versa)
+  const parties = allParties.filter((p) => p.role === (myRole === "debtor" ? "creditor" : "debtor"));
 
   // Computation Results
-  const dailyResult = useMemo(
-    () =>
-      calculateDailyLoan({
+  const dailyResult = useMemo(() => {
+    if (dailyInputMode === "by_payment") {
+      // Auto calculates interest from dailyInstallment * days - principal!
+      return calculateDailyLoan({
+        principal: dailyPrincipal,
+        dailyInstallment: dailyInstallmentInput,
+        days: dailyDays,
+        feeAmount: dailyFee,
+        firstDeductAmount: dailyFirstDeduct,
+        startDate: dailyStartDate,
+        skipSundays: dailySkipSunday,
+      });
+    } else if (dailyInputMode === "by_actual_received") {
+      return calculateDailyLoan({
+        principal: dailyPrincipal,
+        dailyInstallment: dailyInstallmentInput,
+        days: dailyDays,
+        feeAmount: dailyFee,
+        firstDeductAmount: dailyFirstDeduct,
+        actualReceivedAmount: dailyActualReceived,
+        startDate: dailyStartDate,
+        skipSundays: dailySkipSunday,
+      });
+    } else {
+      return calculateDailyLoan({
         principal: dailyPrincipal,
         ratePercent: dailyRate,
         days: dailyDays,
@@ -90,9 +118,20 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
         firstDeductAmount: dailyFirstDeduct,
         startDate: dailyStartDate,
         skipSundays: dailySkipSunday,
-      }),
-    [dailyPrincipal, dailyRate, dailyDays, dailyFee, dailyFirstDeduct, dailyStartDate, dailySkipSunday]
-  );
+      });
+    }
+  }, [
+    dailyInputMode,
+    dailyPrincipal,
+    dailyInstallmentInput,
+    dailyRate,
+    dailyDays,
+    dailyFee,
+    dailyFirstDeduct,
+    dailyActualReceived,
+    dailyStartDate,
+    dailySkipSunday,
+  ]);
 
   const floatingResult = useMemo(
     () =>
@@ -133,11 +172,14 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
   // Active calculation details
   const activeDetails = useMemo(() => {
     switch (loanType) {
-      case "daily_informal":
+      case "daily_informal": {
+        const netText = `(รับจริง ฿${dailyResult.netDisbursed.toLocaleString()})`;
         return {
-          title: contractTitle || `เงินกู้รายวัน ${dailyDays} วัน (เงินต้น ฿${dailyPrincipal.toLocaleString()})`,
+          title:
+            contractTitle ||
+            `${myRole === "debtor" ? "กู้ยืมรายวัน" : "ให้ยืมรายวัน"} ${dailyDays} วัน จ่ายวันละ ฿${dailyResult.dailyInstallment.toLocaleString()} ${netText}`,
           principal: dailyPrincipal,
-          interestRate: dailyRate,
+          interestRate: Number(dailyResult.ratePercent.toFixed(2)),
           installmentCount: dailyResult.schedules.length,
           startDate: dailyStartDate,
           schedules: dailyResult.schedules.map((s: GeneratedScheduleItem) => ({
@@ -147,6 +189,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
             note: s.note,
           })),
         };
+      }
       case "floating_interest":
         return {
           title: contractTitle || `เงินกู้ดอกลอย ${floatingRate}% (เงินต้น ฿${floatingPrincipal.toLocaleString()})`,
@@ -192,9 +235,9 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
     }
   }, [
     loanType,
+    myRole,
     contractTitle,
     dailyPrincipal,
-    dailyRate,
     dailyDays,
     dailyStartDate,
     dailyResult,
@@ -217,32 +260,33 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
   // Handle Save Contract
   const handleSaveContract = async () => {
     let partyId = selectedPartyId;
+    const targetPartyRole = myRole === "debtor" ? "creditor" : "debtor";
 
     if (partyType === "new") {
       if (!newPartyName.trim()) {
-        toast.error("กรุณาระบุชื่อลูกค้า/ลูกหนี้");
+        toast.error(`กรุณาระบุชื่อ${myRole === "debtor" ? "เจ้าหนี้" : "ลูกหนี้"}`);
         return;
       }
       setSaveLoading(true);
       try {
         const createdParty = await createPartyMutation.mutateAsync({
           displayName: newPartyName.trim(),
-          role: "debtor",
+          role: targetPartyRole,
           phone: newPartyPhone.trim(),
-          note: `สร้างสัญญาอัตโนมัติจากโปรแกรมคำนวณ (${loanType})`,
+          note: `สร้างอัตโนมัติจากโปรแกรมคำนวณ (${loanType})`,
         });
         if (createdParty?.partyId) {
           partyId = createdParty.partyId;
         }
       } catch (err: any) {
-        toast.error(`สร้างบัญชีลูกหนี้ไม่สำเร็จ: ${err.message}`);
+        toast.error(`สร้างรายชื่อไม่สำเร็จ: ${err.message}`);
         setSaveLoading(false);
         return;
       }
     }
 
     if (!partyId) {
-      toast.error("กรุณาเลือกลูกหนี้ หรือเพิ่มลูกหนี้ใหม่");
+      toast.error(`กรุณาเลือก${myRole === "debtor" ? "เจ้าหนี้" : "ลูกหนี้"} หรือเพิ่มรายชื่อใหม่`);
       return;
     }
 
@@ -273,18 +317,50 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
 
   return (
     <div className="space-y-8">
-      {/* 1. Page Header */}
+      {/* 1. Page Header with Role Switcher */}
       <PageHeader
         kicker="FINANCIAL ENGINE"
         title="คำนวณ & สร้างสัญญาอัตโนมัติ"
-        description="ระบบคำนวณดอกเบี้ย 4 รูปแบบ พร้อมสร้างสัญญาและบันทึกตารางงวดชำระลงระบบในคลิกเดียว"
+        description="คำนวณดอกเบี้ยและยอดชำระอัตโนมัติ พร้อมหักค่างวดแรก/ค่าสัญญา เพื่อทราบยอดเงินที่ได้รับจริงสุทธิ"
+        action={
+          <div className="flex items-center p-0.5 bg-[#FFFCF8] rounded-full border border-[#1C1917]/10">
+            <button
+              type="button"
+              onClick={() => {
+                setMyRole("debtor");
+                setSelectedPartyId("");
+              }}
+              className={`px-4 py-1.5 text-xs font-medium rounded-full transition-colors cursor-pointer ${
+                myRole === "debtor"
+                  ? "bg-[#1C1917] text-white font-semibold shadow-xs"
+                  : "text-[#78716C] hover:text-[#1C1917]"
+              }`}
+            >
+              ฉันเป็นลูกหนี้ (กู้ยืม)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMyRole("creditor");
+                setSelectedPartyId("");
+              }}
+              className={`px-4 py-1.5 text-xs font-medium rounded-full transition-colors cursor-pointer ${
+                myRole === "creditor"
+                  ? "bg-[#1C1917] text-white font-semibold shadow-xs"
+                  : "text-[#78716C] hover:text-[#1C1917]"
+              }`}
+            >
+              ฉันเป็นเจ้าหนี้ (ให้ยืม)
+            </button>
+          </div>
+        }
       />
 
       {/* 2. Loan Type Selector Tabs */}
       <div className="flex items-center gap-1.5 p-1 bg-[#FFFCF8] rounded-full border border-[#1C1917]/10 overflow-x-auto scrollbar-thin">
         {[
-          { id: "daily_informal" as LoanType, label: "เงินกู้รายวันนอกระบบ" },
-          { id: "floating_interest" as LoanType, label: "เงินกู้ดอกลอย" },
+          { id: "daily_informal" as LoanType, label: "เงินกู้รายวันนอกระบบ (จ่ายรายวัน)" },
+          { id: "floating_interest" as LoanType, label: "เงินกู้ดอกลอย (ส่งเฉพาะดอก)" },
           { id: "flat_installment" as LoanType, label: "ผ่อนสินค้าดอกคงที่" },
           { id: "effective_amortization" as LoanType, label: "ลดต้นลดดอก" },
         ].map((tab) => (
@@ -309,10 +385,10 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
         <div className="lg:col-span-6 bg-[#FFFCF8] rounded-[20px] border border-[#1C1917]/10 p-6 space-y-5">
           <div className="flex items-center justify-between pb-3 border-b border-[#1C1917]/10">
             <h3 className="text-sm font-semibold text-[#1C1917]">
-              ตั้งค่าพารามิเตอร์การคำนวณ
+              ตั้งค่าพารามิเตอร์การคำนวณ ({myRole === "debtor" ? "ฉันเป็นลูกหนี้" : "ฉันเป็นเจ้าหนี้"})
             </h3>
             <span className="text-xs text-[#78716C] font-mono">
-              {loanType === "daily_informal" && "DAILY LOAN"}
+              {loanType === "daily_informal" && "DAILY INFORMAL"}
               {loanType === "floating_interest" && "FLOATING"}
               {loanType === "flat_installment" && "FLAT RATE"}
               {loanType === "effective_amortization" && "AMORTIZATION"}
@@ -322,44 +398,107 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
           {/* Form 1: Daily Informal Loan */}
           {loanType === "daily_informal" && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                    ยอดเงินต้น (บาท)
-                  </label>
-                  <input
-                    type="number"
-                    min="100"
-                    step="100"
-                    value={dailyPrincipal}
-                    onChange={(e) => setDailyPrincipal(Number(e.target.value))}
-                    className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm font-mono tabular-nums text-[#1C1917]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                    อัตราดอกเบี้ยต่อรอบ (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={dailyRate}
-                    onChange={(e) => setDailyRate(Number(e.target.value))}
-                    className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm font-mono tabular-nums text-[#1C1917]"
-                  />
-                </div>
+              {/* Dual input mode toggle */}
+              <div className="p-1 bg-[#F6F4F0] rounded-xl border border-[#1C1917]/10 grid grid-cols-2 gap-1 text-center">
+                <button
+                  type="button"
+                  onClick={() => setDailyInputMode("by_payment")}
+                  className={`py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                    dailyInputMode === "by_payment"
+                      ? "bg-white text-[#1C1917] font-semibold shadow-xs"
+                      : "text-[#78716C] hover:text-[#1C1917]"
+                  }`}
+                >
+                  ⚡ จ่ายวันละเท่าไหร่ (คำนวณดอกอัตโนมัติ)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDailyInputMode("by_rate")}
+                  className={`py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                    dailyInputMode === "by_rate"
+                      ? "bg-white text-[#1C1917] font-semibold shadow-xs"
+                      : "text-[#78716C] hover:text-[#1C1917]"
+                  }`}
+                >
+                  📊 กำหนดดอกเบี้ยเป็น %
+                </button>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                    ระยะเวลา (วัน)
+                    ยอดเงินกู้ตามสัญญา (บาท) *
+                  </label>
+                  <input
+                    type="number"
+                    min="100"
+                    step="100"
+                    placeholder="เช่น 4000"
+                    value={dailyPrincipal}
+                    onChange={(e) => setDailyPrincipal(Number(e.target.value))}
+                    className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm font-mono tabular-nums text-[#1C1917]"
+                  />
+                </div>
+
+                {dailyInputMode === "by_payment" ? (
+                  <div>
+                    <label className="block text-xs font-medium text-[#1C1917] mb-1">
+                      ต้องจ่ายวันละ (บาท/วัน) *
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="เช่น 200"
+                      value={dailyInstallmentInput}
+                      onChange={(e) => setDailyInstallmentInput(Number(e.target.value))}
+                      className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm font-mono tabular-nums font-semibold text-[#1C1917]"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-medium text-[#1C1917] mb-1">
+                      อัตราดอกเบี้ยต่อรอบ (%)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="เช่น 25"
+                      value={dailyRate}
+                      onChange={(e) => setDailyRate(Number(e.target.value))}
+                      className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm font-mono tabular-nums text-[#1C1917]"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#1C1917] mb-1">
+                    ระยะเวลา (วัน) *
                   </label>
                   <input
                     type="number"
                     min="1"
+                    placeholder="เช่น 25"
                     value={dailyDays}
                     onChange={(e) => setDailyDays(Number(e.target.value))}
+                    className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm font-mono tabular-nums text-[#1C1917]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#1C1917] mb-1">
+                    หักค่างวดแรก (บาท)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="เช่น 200"
+                    value={dailyFirstDeduct}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setDailyFirstDeduct(val);
+                      setDailyActualReceived(Math.max(0, dailyPrincipal - val - dailyFee));
+                    }}
                     className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm font-mono tabular-nums text-[#1C1917]"
                   />
                 </div>
@@ -370,26 +509,91 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                   <input
                     type="number"
                     min="0"
+                    placeholder="เช่น 250"
                     value={dailyFee}
-                    onChange={(e) => setDailyFee(Number(e.target.value))}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setDailyFee(val);
+                      setDailyActualReceived(Math.max(0, dailyPrincipal - dailyFirstDeduct - val));
+                    }}
                     className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm font-mono tabular-nums text-[#1C1917]"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                    หักค่างวดแรกล่วงหน้า (บาท)
+              {/* Dedicated Actual Received Input Field */}
+              <div className="p-3.5 bg-[#FAF8F5] rounded-xl border border-[#1C1917]/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-[#1C1917] flex items-center gap-1.5">
+                    <span>💵</span>
+                    <span>{myRole === "debtor" ? "ระบุจำนวนเงินที่ได้รับจริงสุทธิ (บาท)" : "ระบุจำนวนเงินที่โอนให้ยืมจริง (บาท)"}</span>
                   </label>
+                  <span className="text-[11px] text-[#78716C]">กรอกเพื่อปรับยอดอัตโนมัติ</span>
+                </div>
+                <div className="flex gap-2">
                   <input
                     type="number"
                     min="0"
-                    value={dailyFirstDeduct}
-                    onChange={(e) => setDailyFirstDeduct(Number(e.target.value))}
-                    className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm font-mono tabular-nums text-[#1C1917]"
+                    placeholder="เช่น 3550"
+                    value={dailyActualReceived}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setDailyActualReceived(val);
+                    }}
+                    className="flex-1 h-10 px-3 bg-white border border-[#1C1917]/20 rounded-[10px] text-sm font-mono font-bold tabular-nums text-[#1C1917]"
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const autoCalc = Math.max(0, dailyPrincipal - dailyFirstDeduct - dailyFee);
+                      setDailyActualReceived(autoCalc);
+                    }}
+                    className="px-3 h-10 rounded-[10px] bg-white border border-[#1C1917]/15 text-xs font-medium text-[#1C1917] hover:bg-[#1C1917]/5 cursor-pointer whitespace-nowrap"
+                  >
+                    ↺ รีเซ็ตตามค่าหัก (฿{(dailyPrincipal - dailyFirstDeduct - dailyFee).toLocaleString()})
+                  </button>
                 </div>
+              </div>
+
+              {/* Real-time Net Received Highlight Card */}
+              <div className="p-4 bg-[#EBF3ED] rounded-2xl border border-[#3F6B4B]/20 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-[#3F6B4B]">
+                      {myRole === "debtor" ? "จำนวนเงินที่ได้รับจริง (เข้ากระเป๋าจริง)" : "จำนวนเงินที่ให้ยืมจริง (โอนจริง)"}
+                    </div>
+                    <div className="text-[11px] text-[#78716C]">
+                      เงินต้น ฿{dailyPrincipal.toLocaleString()} - หักงวดแรก ฿{dailyFirstDeduct.toLocaleString()} - หักสัญญา ฿{dailyFee.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-[#3F6B4B]">
+                    ฿{dailyResult.netDisbursed.toLocaleString()}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-[#3F6B4B]/15 grid grid-cols-3 gap-2 text-center text-xs">
+                  <div>
+                    <div className="text-[10px] text-[#78716C]">ดอกเบี้ยคำนวณอัตโนมัติ</div>
+                    <div className="font-bold font-mono text-[#1C1917]">
+                      ฿{dailyResult.interest.toLocaleString()} ({dailyResult.ratePercent.toFixed(1)}%)
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-[#78716C]">ยอดชำระคืนรวม</div>
+                    <div className="font-bold font-mono text-[#1C1917]">
+                      ฿{dailyResult.totalRepayment.toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-[#78716C]">ดอกเบี้ยต่อวัน</div>
+                    <div className="font-bold font-mono text-[#1C1917]">
+                      {dailyResult.dailyRate.toFixed(2)}% / วัน
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-[#1C1917] mb-1">
                     วันเริ่มสัญญา
@@ -401,17 +605,18 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                     className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917]"
                   />
                 </div>
+                <div className="flex items-end pb-2">
+                  <label className="flex items-center gap-2 text-xs text-[#1C1917] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={dailySkipSunday}
+                      onChange={(e) => setDailySkipSunday(e.target.checked)}
+                      className="rounded border-[#1C1917]/20 text-[#1C1917]"
+                    />
+                    <span>เว้นวันอาทิตย์</span>
+                  </label>
+                </div>
               </div>
-
-              <label className="flex items-center gap-2 text-xs text-[#1C1917] cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={dailySkipSunday}
-                  onChange={(e) => setDailySkipSunday(e.target.checked)}
-                  className="rounded border-[#1C1917]/20 text-[#1C1917]"
-                />
-                <span>เว้นวันอาทิตย์ (ไม่เก็บค่างวดวันอาทิตย์)</span>
-              </label>
             </div>
           )}
 
@@ -620,8 +825,13 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
 
           {/* Quick Create / Save to Ledger Section */}
           <div className="pt-4 border-t border-[#1C1917]/10 space-y-4">
-            <div className="text-xs font-semibold text-[#1C1917]">
-              บันทึกสัญญาลงสมุดบัญชี
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold text-[#1C1917]">
+                บันทึกสัญญาลงสมุดบัญชี ({myRole === "debtor" ? "ฉันเป็นลูกหนี้" : "ฉันเป็นเจ้าหนี้"})
+              </div>
+              <span className="text-[11px] font-mono text-[#78716C]">
+                {myRole === "debtor" ? "บันทึกลงหน้า กู้ & บิล" : "บันทึกลงหน้า ให้ยืม"}
+              </span>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -634,7 +844,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                     : "bg-white border-[#1C1917]/15 text-[#1C1917]"
                 }`}
               >
-                เลือกลูกหนี้เดิม
+                {myRole === "debtor" ? "เลือกเจ้าหนี้เดิม" : "เลือกลูกหนี้เดิม"}
               </button>
               <button
                 type="button"
@@ -645,37 +855,42 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                     : "bg-white border-[#1C1917]/15 text-[#1C1917]"
                 }`}
               >
-                + เพิ่มลูกหนี้ใหม่
+                {myRole === "debtor" ? "+ เพิ่มเจ้าหนี้ใหม่" : "+ เพิ่มลูกหนี้ใหม่"}
               </button>
             </div>
 
             {partyType === "existing" ? (
               <div>
                 <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                  เลือกลูกหนี้
+                  {myRole === "debtor" ? "เลือกเจ้าหนี้" : "เลือกลูกหนี้"}
                 </label>
                 <select
                   value={selectedPartyId}
                   onChange={(e) => setSelectedPartyId(e.target.value)}
                   className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917]"
                 >
-                  <option value="">-- เลือกลูกหนี้ --</option>
+                  <option value="">-- {myRole === "debtor" ? "เลือกเจ้าหนี้" : "เลือกลูกหนี้"} --</option>
                   {parties.map((p) => (
                     <option key={p.partyId} value={p.partyId}>
                       {p.displayName} {p.phone ? `(${p.phone})` : ""}
                     </option>
                   ))}
                 </select>
+                {parties.length === 0 && (
+                  <p className="text-[11px] text-[#78716C] mt-1">
+                    ยังไม่มีรายชื่อ{myRole === "debtor" ? "เจ้าหนี้" : "ลูกหนี้"}ในระบบ กรุณาเลือก "+ เพิ่ม{myRole === "debtor" ? "เจ้าหนี้" : "ลูกหนี้"}ใหม่"
+                  </p>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                    ชื่อลูกหนี้ *
+                    ชื่อ{myRole === "debtor" ? "เจ้าหนี้" : "ลูกหนี้"} *
                   </label>
                   <input
                     type="text"
-                    placeholder="เช่น วีระ กิตติคุณ"
+                    placeholder={myRole === "debtor" ? "เช่น เจ้าหนี้นอกระบบ A / ร้านทอง B" : "เช่น วีระ กิตติคุณ"}
                     value={newPartyName}
                     onChange={(e) => setNewPartyName(e.target.value)}
                     className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917]"
@@ -718,7 +933,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
               onClick={handleSaveContract}
               icon={<CheckCircle2 className="w-4 h-4" />}
             >
-              สร้างสัญญาและบันทึกตารางงวดลงระบบ
+              บันทึกสัญญาลงสมุดบัญชี ({myRole === "debtor" ? "หน้า กู้ & บิล" : "หน้า ให้ยืม"})
             </Button>
           </div>
         </div>
@@ -729,28 +944,63 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
           <div className="bg-[#FFFCF8] rounded-[20px] border border-[#1C1917]/10 p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[#1C1917]/10">
               <span className="text-xs font-mono text-[#78716C] uppercase">
-                ผลการคำนวณสัญญา
+                สรุปการคำนวณ ({myRole === "debtor" ? "ฉันเป็นลูกหนี้" : "ฉันเป็นเจ้าหนี้"})
               </span>
               <StatusChip status="active" label="พร้อมออกสัญญา" />
             </div>
 
             {loanType === "daily_informal" && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs text-[#78716C]">ค่างวดส่งรายวัน</div>
-                  <Money amount={dailyResult.dailyInstallment} size="xl" />
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-[#78716C]">ค่างวดส่งรายวัน</div>
+                    <Money amount={dailyResult.dailyInstallment} size="xl" />
+                    <div className="text-[11px] text-[#78716C]">ระยะเวลา {dailyDays} วัน</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-[#78716C]">
+                      {myRole === "debtor" ? "ยอดเงินที่ได้รับจริง (สุทธิ)" : "ยอดเงินที่ให้ยืมจริง (สุทธิ)"}
+                    </div>
+                    <Money amount={dailyResult.netDisbursed} size="xl" sentiment="income" />
+                    <div className="text-[11px] text-[#78716C]">
+                      หักงวดแรก ฿{dailyFirstDeduct} + ค่าสัญญา ฿{dailyFee}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-xs text-[#78716C]">ยอดจ่ายจริงให้ลูกค้า</div>
-                  <Money amount={dailyResult.netDisbursed} size="xl" sentiment="income" />
+
+                <div className="grid grid-cols-3 gap-3 p-3 bg-white rounded-xl border border-[#1C1917]/10 text-xs">
+                  <div>
+                    <div className="text-[#78716C] text-[11px]">ยอดเงินต้นสัญญา</div>
+                    <div className="font-bold font-mono text-sm text-[#1C1917]">
+                      ฿{dailyPrincipal.toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[#78716C] text-[11px]">ดอกเบี้ยคำนวณอัตโนมัติ</div>
+                    <div className="font-bold font-mono text-sm text-[#3F6B4B]">
+                      ฿{dailyResult.interest.toLocaleString()} ({dailyResult.ratePercent.toFixed(1)}%)
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[#78716C] text-[11px]">ยอดชำระคืนรวม</div>
+                    <div className="font-bold font-mono text-sm text-[#1C1917]">
+                      ฿{dailyResult.totalRepayment.toLocaleString()}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-xs text-[#78716C]">ยอดเรียกเก็บรวม</div>
-                  <Money amount={dailyResult.totalRepayment} size="base" />
-                </div>
-                <div>
-                  <div className="text-xs text-[#78716C]">กำไรสุทธิรวม</div>
-                  <Money amount={dailyResult.totalProfit} size="base" sentiment="income" />
+
+                <div className="p-3 bg-[#FAF8F5] rounded-xl border border-[#1C1917]/10 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-[#78716C]">ต้นทุนเงินกู้รวม (ดอกเบี้ย + ค่าสัญญา + หักงวดแรก):</span>
+                    <div className="font-medium text-[#1C1917]">
+                      เทียบเท่า {dailyResult.netReceivedInterestRate.toFixed(2)}% ของยอดเงินที่ได้รับจริง
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-mono font-bold text-sm text-[#1C1917]">
+                      ฿{(dailyResult.totalRepayment - dailyResult.netDisbursed).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}

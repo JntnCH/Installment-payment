@@ -4,6 +4,7 @@ import DashboardOverview from "@/components/DashboardOverview";
 import DialogflowSheetViewer from "@/components/DialogflowSheetViewer";
 import CashflowManager from "@/components/CashflowManager";
 import IndividualLedger from "@/components/IndividualLedger";
+import InstallmentGoodsManager from "@/components/InstallmentGoodsManager";
 import LoanCalculator from "@/components/LoanCalculator";
 import GoogleSheetsSync from "@/components/GoogleSheetsSync";
 import { trpc } from "@/lib/trpc";
@@ -37,12 +38,22 @@ export default function Home() {
         />
       )}
 
-      {activeTab === "dialogflow" && <DialogflowSheetViewer />}
+      {activeTab === "debt_hub" && (
+        <IndividualLedger
+          initialSubTab="borrowed"
+          refreshSignal={refreshSignal}
+        />
+      )}
+
+      {activeTab === "installments" && <InstallmentGoodsManager />}
 
       {activeTab === "cashflow" && <CashflowManager />}
 
+      {activeTab === "dialogflow" && <DialogflowSheetViewer />}
+
       {activeTab === "lent" && (
         <IndividualLedger
+          initialSubTab="lent"
           initialRole="debtor"
           refreshSignal={refreshSignal}
         />
@@ -50,13 +61,17 @@ export default function Home() {
 
       {activeTab === "borrowed" && (
         <IndividualLedger
+          initialSubTab="borrowed"
           initialRole="creditor"
           refreshSignal={refreshSignal}
         />
       )}
 
       {activeTab === "calculator" && (
-        <LoanCalculator onContractCreated={handleContractCreated} />
+        <IndividualLedger
+          initialSubTab="calculator"
+          refreshSignal={refreshSignal}
+        />
       )}
 
       {activeTab === "sheets" && <GoogleSheetsSync />}

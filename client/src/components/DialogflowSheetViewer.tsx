@@ -37,6 +37,7 @@ import {
   getSpreadsheetDetails,
   readSpreadsheetValues,
   appendSpreadsheetRow,
+  createSpreadsheetTab,
   parseDialogflowSheetRows,
   DialogflowSheetRow,
   GoogleDriveFile,
@@ -67,6 +68,14 @@ export default function DialogflowSheetViewer() {
     return localStorage.getItem("df_sheet_tab") || "";
   });
   const [spreadsheetTitle, setSpreadsheetTitle] = useState<string>("");
+
+  // Create new worksheet tab state
+  const [showCreateTabModal, setShowCreateTabModal] = useState(false);
+  const [newTabNameInput, setNewTabNameInput] = useState("");
+  const [isCreatingTab, setIsCreatingTab] = useState(false);
+  const [entryTargetTab, setEntryTargetTab] = useState<string>("");
+  const [showInlineNewTabInForm, setShowInlineNewTabInForm] = useState(false);
+  const [inlineNewTabName, setInlineNewTabName] = useState("");
 
   // Data State
   const [loadingRows, setLoadingRows] = useState(false);
@@ -232,32 +241,81 @@ export default function DialogflowSheetViewer() {
     : selectedSheetId;
 
   // Load Spreadsheet Details (Tabs & Titles)
+  const refreshSheetTabs = async (autoSelectTitle?: string) => {
+    if (!accessToken || !effectiveSheetId) return [];
+    try {
+      const details = await getSpreadsheetDetails(accessToken, effectiveSheetId);
+      setSpreadsheetTitle(details.title);
+      setSheetTabs(details.sheets);
+      if (details.sheets.length > 0) {
+        if (autoSelectTitle) {
+          setSelectedTabName(autoSelectTitle);
+          localStorage.setItem("df_sheet_tab", autoSelectTitle);
+          setEntryTargetTab(autoSelectTitle);
+        } else if (!selectedTabName) {
+          const firstTab = details.sheets[0].title;
+          setSelectedTabName(firstTab);
+          localStorage.setItem("df_sheet_tab", firstTab);
+          setEntryTargetTab(firstTab);
+        }
+      }
+      return details.sheets;
+    } catch (err: any) {
+      console.warn("Could not get sheet tabs:", err.message);
+      return [];
+    }
+  };
+
   useEffect(() => {
     if (!accessToken || !effectiveSheetId) return;
 
     let isMounted = true;
     localStorage.setItem("df_sheet_id", effectiveSheetId);
 
-    getSpreadsheetDetails(accessToken, effectiveSheetId)
-      .then((details) => {
-        if (!isMounted) return;
-        setSpreadsheetTitle(details.title);
-        setSheetTabs(details.sheets);
-        if (details.sheets.length > 0) {
-          const matchedTab = details.sheets.find((s) => s.title === selectedTabName);
-          const firstTab = matchedTab ? matchedTab.title : details.sheets[0].title;
-          setSelectedTabName(firstTab);
-          localStorage.setItem("df_sheet_tab", firstTab);
-        }
-      })
-      .catch((err) => {
-        console.warn("Could not get sheet tabs:", err.message);
-      });
+    refreshSheetTabs();
 
     return () => {
       isMounted = false;
     };
   }, [accessToken, effectiveSheetId]);
+
+  // Create New Tab in Spreadsheet
+  const handleCreateNewTab = async (titleToCreate?: string) => {
+    const rawTitle = (titleToCreate || newTabNameInput).trim();
+    if (!rawTitle) {
+      toast.error("กรุณาระบุชื่อแผ่นงาน (Worksheet Name)");
+      return null;
+    }
+    if (!accessToken || !effectiveSheetId) {
+      toast.error("กรุณาเข้าสู่ระบบ Google และเลือกไฟล์ชีตก่อน");
+      return null;
+    }
+
+    setIsCreatingTab(true);
+    try {
+      const initialHeaders = ["Date", "item type", "list", "Amount", "Note"];
+      const created = await createSpreadsheetTab(
+        accessToken,
+        effectiveSheetId,
+        rawTitle,
+        initialHeaders
+      );
+
+      toast.success(`สร้างแผ่นงาน '${created.title}' ใน Google Sheets สำเร็จ!`);
+      setShowCreateTabModal(false);
+      setNewTabNameInput("");
+      setShowInlineNewTabInForm(false);
+      setInlineNewTabName("");
+
+      await refreshSheetTabs(created.title);
+      return created.title;
+    } catch (err: any) {
+      toast.error(`สร้างแผ่นงานไม่สำเร็จ: ${err.message}`);
+      return null;
+    } finally {
+      setIsCreatingTab(false);
+    }
+  };
 
   // Load Sheet Rows
   const loadSheetData = async () => {
@@ -279,7 +337,7 @@ export default function DialogflowSheetViewer() {
       setLastSyncTime(new Date());
       setCurrentPage(1);
 
-      toast.success(`โหลดข้อมูลจาก Dialogflow ชีตสำเร็จ (${parsed.records.length} รายการ)`);
+      toast.success(`โหลดข้อมูลจากแท็บ '${selectedTabName || "Sheet1"}' สำเร็จ (${parsed.records.length} รายการ)`);
     } catch (err: any) {
       toast.error(`อ่านข้อมูลไม่สำเร็จ: ${err.message}`);
     } finally {
@@ -308,6 +366,18 @@ export default function DialogflowSheetViewer() {
 
     setIsSubmittingEntry(true);
     try {
+      let targetTab = entryTargetTab || selectedTabName || "Sheet1";
+
+      // If user chose to create inline new tab
+      if (showInlineNewTabInForm && inlineNewTabName.trim()) {
+        const createdTab = await handleCreateNewTab(inlineNewTabName.trim());
+        if (!createdTab) {
+          setIsSubmittingEntry(false);
+          return;
+        }
+        targetTab = createdTab;
+      }
+
       const rowValues = [
         newEntry.date.trim(),
         newEntry.itemType,
@@ -319,11 +389,11 @@ export default function DialogflowSheetViewer() {
       await appendSpreadsheetRow(
         accessToken,
         effectiveSheetId,
-        selectedTabName || "Sheet1",
+        targetTab,
         rowValues
       );
 
-      toast.success("เพิ่มรายการลง Google Sheet เรียบร้อยแล้ว!");
+      toast.success(`เพิ่มรายการลงแท็บ '${targetTab}' เรียบร้อยแล้ว!`);
       setNewEntry({
         date: new Date().toLocaleDateString("en-GB"),
         itemType: "expense",
@@ -332,7 +402,16 @@ export default function DialogflowSheetViewer() {
         note: "",
       });
       setShowAddForm(false);
-      loadSheetData();
+      setShowInlineNewTabInForm(false);
+      setInlineNewTabName("");
+
+      // Switch to that tab if not already
+      if (targetTab !== selectedTabName) {
+        setSelectedTabName(targetTab);
+        localStorage.setItem("df_sheet_tab", targetTab);
+      } else {
+        loadSheetData();
+      }
     } catch (err: any) {
       toast.error(`ไม่สามารถบันทึกลงชีตได้: ${err.message}`);
     } finally {
@@ -754,9 +833,20 @@ export default function DialogflowSheetViewer() {
 
             {/* Tab / Sheet Name Selector */}
             <div className="md:col-span-5">
-              <label className="block text-[11px] font-medium text-[#78716C] mb-1">
-                เลือกแท็บชีต (Worksheet Tab)
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-medium text-[#78716C]">
+                  เลือกแผ่นงาน (Worksheet Tab)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateTabModal(true)}
+                  className="text-[11px] font-medium text-[#3F6B4B] hover:text-[#2E5037] flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>สร้างหน้าใหม่</span>
+                </button>
+              </div>
+
               <div className="flex items-center gap-2">
                 {sheetTabs.length > 0 ? (
                   <select
@@ -786,8 +876,18 @@ export default function DialogflowSheetViewer() {
                   />
                 )}
 
+                <button
+                  type="button"
+                  onClick={() => setShowCreateTabModal(true)}
+                  title="สร้างแผ่นงานใหม่ใน Google Sheets"
+                  className="h-9 px-2.5 bg-[#F6F4F0] hover:bg-[#EBE7DF] border border-[#1C1917]/15 rounded-[10px] text-xs font-medium text-[#1C1917] flex items-center gap-1 shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">หน้าใหม่</span>
+                </button>
+
                 {lastSyncTime && (
-                  <span className="text-[10px] text-[#78716C] shrink-0 font-mono">
+                  <span className="text-[10px] text-[#78716C] shrink-0 font-mono hidden sm:inline">
                     อัปเดต: {lastSyncTime.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
                   </span>
                 )}
@@ -795,24 +895,136 @@ export default function DialogflowSheetViewer() {
             </div>
           </div>
         )}
+
+        {/* Horizontal Tab Chips for Quick Switching */}
+        {currentUser && sheetTabs.length > 0 && (
+          <div className="pt-2 border-t border-[#1C1917]/10 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+            <span className="text-[11px] font-semibold text-[#78716C] shrink-0 mr-1">
+              แผ่นงานทั้งหมด:
+            </span>
+            {sheetTabs.map((tab) => {
+              const isActive = selectedTabName === tab.title;
+              return (
+                <button
+                  key={tab.sheetId}
+                  type="button"
+                  onClick={() => {
+                    setSelectedTabName(tab.title);
+                    localStorage.setItem("df_sheet_tab", tab.title);
+                  }}
+                  className={`px-3 py-1.5 rounded-[8px] text-xs font-medium shrink-0 flex items-center gap-1.5 transition-all cursor-pointer ${
+                    isActive
+                      ? "bg-[#1C1917] text-white shadow-xs"
+                      : "bg-white text-[#78716C] hover:text-[#1C1917] border border-[#1C1917]/10"
+                  }`}
+                >
+                  <span>{tab.title}</span>
+                  {tab.rowCount !== undefined && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : "bg-[#1C1917]/5 text-[#78716C]"
+                      }`}
+                    >
+                      {tab.rowCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => setShowCreateTabModal(true)}
+              className="px-3 py-1.5 rounded-[8px] text-xs font-medium shrink-0 flex items-center gap-1 border border-dashed border-[#3F6B4B]/40 text-[#3F6B4B] hover:bg-[#3F6B4B]/10 transition-all cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>สร้างหน้าใหม่</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 3. Quick Entry Form Accordion */}
       {showAddForm && (
         <div className="bg-[#FFFCF8] rounded-[20px] border border-[#1C1917]/15 p-6 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center justify-between pb-3 border-b border-[#1C1917]/10 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#1C1917]/10 mb-4 gap-2">
             <div className="flex items-center gap-2">
               <Plus className="w-5 h-5 text-[#1C1917]" />
               <h3 className="text-sm font-bold text-[#1C1917]">
                 เพิ่มรายการใหม่ลง Google Sheet (Date | item type | list | Amount)
               </h3>
             </div>
-            <span className="text-xs text-[#78716C]">
-              บันทึกตรงเข้าแท็บ: <b>{selectedTabName || "Sheet1"}</b>
-            </span>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-[#78716C]">บันทึกลงแผ่นงาน:</span>
+              <span className="px-2 py-0.5 rounded-[6px] bg-[#1C1917]/5 font-semibold text-[#1C1917] font-mono">
+                {showInlineNewTabInForm
+                  ? inlineNewTabName.trim() || "(สร้างหน้าใหม่)"
+                  : entryTargetTab || selectedTabName || "Sheet1"}
+              </span>
+            </div>
           </div>
 
           <form onSubmit={handleAddEntry} className="space-y-4">
+            {/* Target Worksheet Selector in Form */}
+            <div className="p-3.5 bg-[#F6F4F0] rounded-[12px] space-y-2 border border-[#1C1917]/10">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-[#1C1917] flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-[#3F6B4B]" />
+                  <span>เลือกแผ่นงานเป้าหมายที่จะบันทึกลง (Worksheet Tab)</span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => setShowInlineNewTabInForm(!showInlineNewTabInForm)}
+                  className="text-xs font-medium text-[#3F6B4B] hover:text-[#2E5037] flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{showInlineNewTabInForm ? "เลือกแผ่นงานที่มีอยู่" : "+ สร้างหน้าใหม่"}</span>
+                </button>
+              </div>
+
+              {showInlineNewTabInForm ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="เช่น รายการ_สิงหาคม2569, รายจ่าย_งวดใหม่"
+                    value={inlineNewTabName}
+                    onChange={(e) => setInlineNewTabName(e.target.value)}
+                    className="flex-1 h-9 px-3 bg-white border border-[#1C1917]/20 rounded-[8px] text-xs font-medium text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
+                  />
+                  <span className="text-[11px] text-[#78716C] shrink-0">
+                    (จะสร้างแผ่นงานใหม่อัตโนมัติเมื่อกดบันทึก)
+                  </span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <select
+                    value={entryTargetTab || selectedTabName}
+                    onChange={(e) => setEntryTargetTab(e.target.value)}
+                    className="h-9 px-3 bg-white border border-[#1C1917]/15 rounded-[8px] text-xs font-medium text-[#1C1917]"
+                  >
+                    {sheetTabs.length > 0 ? (
+                      sheetTabs.map((tab) => (
+                        <option key={tab.sheetId} value={tab.title}>
+                          📑 {tab.title} {tab.rowCount ? `(~${tab.rowCount} แถว)` : ""}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={selectedTabName || "Sheet1"}>
+                        📑 {selectedTabName || "Sheet1"}
+                      </option>
+                    )}
+                  </select>
+                  <div className="text-[11px] text-[#78716C] flex items-center">
+                    ระบบจะบันทึกข้อมูลต่อท้ายแถวสุดท้ายในแผ่นงานที่เลือก
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
               <div>
                 <label className="block text-xs font-medium text-[#1C1917] mb-1">
@@ -1355,6 +1567,104 @@ export default function DialogflowSheetViewer() {
                 onClick={() => setShowWebhookGuide(false)}
               >
                 เข้าใจแล้ว
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Create Worksheet Tab Modal */}
+      {showCreateTabModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-[#FFFCF8] rounded-[20px] border border-[#1C1917]/15 p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#3F6B4B]/10 text-[#3F6B4B] flex items-center justify-center">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#1C1917]">
+                    สร้างแผ่นงานใหม่ (Create Worksheet Tab)
+                  </h3>
+                  <p className="text-xs text-[#78716C] mt-0.5">
+                    เพิ่มหน้าใหม่ใน Google Sheets: {spreadsheetTitle || effectiveSheetId}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowCreateTabModal(false)}
+                className="text-xs text-[#78716C] hover:text-[#1C1917] p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-[#1C1917] mb-1.5">
+                  ชื่อแผ่นงานใหม่ (Tab Name) *
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="เช่น กันยายน 2569, รายจ่าย_บิล, สัญญา_ใหม่"
+                  value={newTabNameInput}
+                  onChange={(e) => setNewTabNameInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleCreateNewTab();
+                    }
+                  }}
+                  className="w-full h-10 px-3.5 bg-white border border-[#1C1917]/20 rounded-[10px] text-xs font-medium text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
+                />
+              </div>
+
+              {/* Suggestions */}
+              <div>
+                <span className="text-[11px] text-[#78716C] mb-1.5 block">แนะนำชื่อแผ่นงาน:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    `รายการ_${new Date().toLocaleDateString("th-TH", { month: "short", year: "numeric" }).replace(" ", "")}`,
+                    `รายรับรายจ่าย_${new Date().getFullYear() + 543}`,
+                    "สัญญาและงวดชำระ",
+                    "ผ่อนสินค้า_อุปกรณ์",
+                    "บันทึกหนี้สิน",
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setNewTabNameInput(preset)}
+                      className="px-2.5 py-1 rounded-[6px] bg-[#F6F4F0] hover:bg-[#EBE7DF] text-[11px] text-[#1C1917] font-medium transition-colors cursor-pointer border border-[#1C1917]/10"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-3 bg-[#F6F4F0] rounded-[10px] text-[11px] text-[#78716C] leading-relaxed">
+                ℹ️ ระบบจะสร้างแผ่นงานใหม่ใน Google Spreadsheet และเตรียมหัวตาราง (Date, item type, list, Amount, Note) ให้อัตโนมัติ
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setShowCreateTabModal(false)}
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                loading={isCreatingTab}
+                onClick={() => handleCreateNewTab()}
+                icon={<Plus className="w-4 h-4" />}
+              >
+                สร้างแผ่นงานทันที
               </Button>
             </div>
           </div>

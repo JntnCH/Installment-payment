@@ -411,6 +411,141 @@ export async function readSpreadsheetValues(
 }
 
 /**
+ * Create a new worksheet tab inside an existing spreadsheet
+ */
+export async function createSpreadsheetTab(
+  accessToken: string,
+  spreadsheetId: string,
+  title: string,
+  headers?: (string | number)[]
+): Promise<{ sheetId: number; title: string }> {
+  const safeTitle = title.trim();
+  if (!safeTitle) throw new Error("กรุณาระบุชื่อแผ่นงาน (Worksheet Name)");
+
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            addSheet: {
+              properties: {
+                title: safeTitle,
+              },
+            },
+          },
+        ],
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData?.error?.message ||
+        `สร้างแผ่นงาน '${safeTitle}' ไม่สำเร็จ (${response.status})`
+    );
+  }
+
+  const result = await response.json();
+  const createdSheet = result.replies?.[0]?.addSheet?.properties;
+  const sheetId = createdSheet?.sheetId || 0;
+
+  // If initial headers are provided, write them to row 1
+  if (headers && headers.length > 0) {
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
+        `'${safeTitle}'!A1`
+      )}?valueInputOption=USER_ENTERED`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          values: [headers],
+        }),
+      }
+    ).catch((err) => console.warn("Failed to write initial headers:", err));
+  }
+
+  return { sheetId, title: safeTitle };
+}
+
+/**
+ * Export data rows directly to a specific worksheet tab
+ */
+export async function exportDataToSpecificTab(
+  accessToken: string,
+  spreadsheetId: string,
+  tabTitle: string,
+  rows: (string | number)[][],
+  clearExisting: boolean = true
+): Promise<boolean> {
+  const safeTitle = tabTitle.trim();
+  if (!safeTitle) throw new Error("กรุณาระบุชื่อแผ่นงาน");
+
+  // Ensure sheet exists or create it
+  try {
+    const details = await getSpreadsheetDetails(accessToken, spreadsheetId);
+    const exists = details.sheets.some((s) => s.title === safeTitle);
+    if (!exists) {
+      await createSpreadsheetTab(accessToken, spreadsheetId, safeTitle);
+    }
+  } catch (err) {
+    console.warn("Could not check/create tab:", err);
+  }
+
+  if (clearExisting) {
+    // Clear old data in range
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
+        `'${safeTitle}'!A1:Z5000`
+      )}:clear`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    ).catch(() => {});
+  }
+
+  // Write new values
+  const writeRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
+      `'${safeTitle}'!A1`
+    )}?valueInputOption=USER_ENTERED`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        values: rows,
+      }),
+    }
+  );
+
+  if (!writeRes.ok) {
+    const errData = await writeRes.json().catch(() => ({}));
+    throw new Error(
+      errData?.error?.message || `บันทึกข้อมูลลงแผ่นงาน '${safeTitle}' ไม่สำเร็จ`
+    );
+  }
+
+  return true;
+}
+
+/**
  * Append a single record row to a sheet
  */
 export async function appendSpreadsheetRow(

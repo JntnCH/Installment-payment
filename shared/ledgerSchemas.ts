@@ -61,10 +61,11 @@ export const ledgerIdInputSchema = z.object({
 export const partyUpdateInputSchema = z.object({
   id: z.string().trim().min(1).max(64),
   displayName: z.string().trim().min(1).max(160).optional(),
+  role: partyRoleSchema.optional(),
   phone: z.string().trim().max(32).optional(),
   note: z.string().trim().max(2_000).optional(),
   status: z.enum(["active", "archived"]).optional(),
-}).refine(input => input.displayName !== undefined || input.phone !== undefined || input.note !== undefined || input.status !== undefined, "โปรดระบุข้อมูลที่ต้องการแก้ไข");
+}).refine(input => input.displayName !== undefined || input.role !== undefined || input.phone !== undefined || input.note !== undefined || input.status !== undefined, "โปรดระบุข้อมูลที่ต้องการแก้ไข");
 
 export const contractUpdateInputSchema = z.object({
   id: z.string().trim().min(1).max(64),

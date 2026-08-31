@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
   Sparkles,
   Bot,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -131,32 +132,75 @@ export default function DashboardOverview({
         }
       />
 
-      {/* 2. Hero Ledger Overview Box */}
-      <div className="bg-[#FFFCF8] rounded-[20px] border border-[#1C1917]/10 p-6 sm:p-8 space-y-6">
-        <div>
-          <div className="text-xs font-mono text-[#78716C] uppercase tracking-wider mb-1">
-            ยอดคงค้างที่รอเรียกเก็บสุทธิ (Net Outstanding)
+      {/* 2. Hero Financial & Balance Breakdown Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="ลูกหนี้ค้างชำระ (ฉันเป็นเจ้าหนี้)"
+          amount={stats?.debtorOutstanding ?? stats?.totalOutstanding ?? 0}
+          subtitle={`เงินต้นให้ยืม ฿${Number(stats?.debtorPrincipal ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} (${stats?.debtorCount ?? 0} ราย)`}
+          accentBar="income"
+          onClick={() => onNavigate("debt_hub")}
+        />
+        <StatCard
+          label="เจ้าหนี้ & บิลที่ต้องจ่าย (ฉันเป็นลูกหนี้)"
+          amount={stats?.creditorOutstanding ?? 0}
+          subtitle={`ยอดกู้ยืมรวม ฿${Number(stats?.creditorPrincipal ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} (${stats?.creditorCount ?? 0} ราย)`}
+          accentBar="expense"
+          onClick={() => onNavigate("debt_hub")}
+        />
+        <StatCard
+          label="เงินรับเข้าสะสม (Inflow)"
+          amount={stats?.totalInflow ?? stats?.totalCollected ?? 0}
+          subtitle="รวมยอดรับชำระคืน + เงินกู้ที่ได้รับ"
+          accentBar="income"
+          sentiment="income"
+        />
+        <StatCard
+          label="เงินจ่ายออกสะสม (Outflow)"
+          amount={stats?.totalOutflow ?? 0}
+          subtitle="รวมยอดจ่ายหนี้ + เงินปล่อยกู้"
+          accentBar="expense"
+          sentiment="expense"
+        />
+      </div>
+
+      {/* 3. Hero Ledger Overview Box */}
+      <div className="bg-[#FFFCF8] rounded-[20px] border border-[#1C1917]/10 p-6 sm:p-8 space-y-6 shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="text-xs font-mono text-[#78716C] uppercase tracking-wider mb-1">
+              ยอดคงค้างรอเรียกเก็บสุทธิทั้งหมด (Net Outstanding)
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4">
+              <Money
+                amount={stats?.totalOutstanding ?? 0}
+                size="hero"
+                sentiment="default"
+              />
+              <span className="text-xs text-[#78716C]">
+                จากสัญญาทั้งหมด {stats?.totalContracts ?? 0} รายการ
+              </span>
+            </div>
           </div>
-          <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4">
-            <Money
-              amount={stats?.totalOutstanding ?? 0}
-              size="hero"
-              sentiment="default"
-            />
-            <span className="text-xs text-[#78716C]">
-              จากสัญญาทั้งหมด {stats?.totalContracts ?? 0} รายการ
-            </span>
-          </div>
+
+          <Button
+            variant="primary"
+            size="md"
+            icon={<Layers className="w-4 h-4" />}
+            onClick={() => onNavigate("debt_hub")}
+          >
+            เปิดหน้าจัดการหนี้ & สัญญา
+          </Button>
         </div>
 
         {/* 3 Secondary Metric Badges */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t border-[#1C1917]/10">
           <div className="space-y-1">
-            <div className="text-xs text-[#78716C]">ยอดปล่อยกู้ / เงินต้นรวม</div>
+            <div className="text-xs text-[#78716C]">ยอดเงินต้นรวมทุกสัญญา</div>
             <Money amount={stats?.totalPrincipal ?? 0} size="lg" />
             <div className="text-[11px] text-[#78716C]">
               กำไรดอกเบี้ยคาดหวัง{" "}
-              <span className="text-[#3F6B4B] font-mono tabular-nums">
+              <span className="text-[#16A34A] font-mono tabular-nums font-semibold">
                 +฿{Number(stats?.projectedInterest ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </span>
             </div>
@@ -171,7 +215,7 @@ export default function DashboardOverview({
             />
             <div className="text-[11px] text-[#78716C]">
               ความคืบหน้า{" "}
-              <span className="font-mono tabular-nums">
+              <span className="font-mono tabular-nums font-semibold text-[#16A34A]">
                 {stats?.totalScheduled
                   ? Math.round(((stats.totalCollected ?? 0) / stats.totalScheduled) * 100)
                   : 0}
@@ -187,7 +231,7 @@ export default function DashboardOverview({
               size="lg"
               sentiment="expense"
             />
-            <div className="text-[11px] text-[#A33B2B]">
+            <div className="text-[11px] text-[#DC2626] font-semibold">
               {(stats?.overdue?.count ?? 0) + (stats?.today?.count ?? 0)} รายการที่ต้องติดตาม
             </div>
           </div>

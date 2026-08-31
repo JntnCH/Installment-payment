@@ -419,6 +419,7 @@ export async function updateLedgerParty(ownerId: number, input: PartyUpdateInput
       .update(parties)
       .set({
         ...(input.displayName === undefined ? {} : { displayName: input.displayName }),
+        ...(input.role === undefined ? {} : { role: input.role }),
         ...(input.phone === undefined ? {} : { phone: input.phone || null }),
         ...(input.note === undefined ? {} : { note: input.note || null }),
         ...(input.status === undefined ? {} : { status: input.status }),
@@ -431,6 +432,7 @@ export async function updateLedgerParty(ownerId: number, input: PartyUpdateInput
   const updated: PartyRow = {
     ...party,
     displayName: input.displayName ?? party.displayName,
+    role: input.role ?? party.role,
     phone: input.phone !== undefined ? input.phone || null : party.phone,
     note: input.note !== undefined ? input.note || null : party.note,
     status: input.status ?? party.status,
@@ -448,6 +450,33 @@ export async function createLedgerContract(ownerId: number, input: ContractInput
   const now = new Date();
   const db = await getDb();
 
+  // Ensure schedules are generated if none provided
+  const schedulesToInsert =
+    input.schedules && input.schedules.length > 0
+      ? input.schedules
+      : (() => {
+          const count = Math.max(1, input.installmentCount || 1);
+          const totalAmount = input.principal * (1 + (input.interestRate || 0) / 100);
+          const perInstallment = Math.round((totalAmount / count) * 100) / 100;
+          const list = [];
+          const [year, month, day] = (input.startDate || new Date().toISOString().slice(0, 10))
+            .split("-")
+            .map(Number);
+          for (let i = 1; i <= count; i++) {
+            const d = new Date(year, month - 1 + (i - 1), day || 1);
+            const yStr = d.getFullYear();
+            const mStr = String(d.getMonth() + 1).padStart(2, "0");
+            const dStr = String(d.getDate()).padStart(2, "0");
+            list.push({
+              installmentNo: i,
+              dueDate: `${yStr}-${mStr}-${dStr}`,
+              amount: i === count ? Number((totalAmount - perInstallment * (count - 1)).toFixed(2)) : perInstallment,
+              note: `งวดที่ ${i}/${count}`,
+            });
+          }
+          return list;
+        })();
+
   if (db) {
     await db.insert(contracts).values({
       id: contractId,
@@ -461,9 +490,9 @@ export async function createLedgerContract(ownerId: number, input: ContractInput
       status: input.status,
     });
 
-    if (input.schedules.length) {
+    if (schedulesToInsert.length) {
       await db.insert(contractPaymentSchedules).values(
-        input.schedules.map(schedule => ({
+        schedulesToInsert.map((schedule) => ({
           id: crypto.randomUUID(),
           ownerId,
           partyId: input.partyId,
@@ -496,7 +525,7 @@ export async function createLedgerContract(ownerId: number, input: ContractInput
   };
   memoryContracts.set(contractId, contractRow);
 
-  for (const s of input.schedules) {
+  for (const s of schedulesToInsert) {
     const sId = crypto.randomUUID();
     memorySchedules.set(sId, {
       id: sId,
@@ -836,8 +865,25 @@ export async function getDashboardStats(ownerId: number) {
   let totalCollected = 0;
   let totalOutstanding = 0;
 
+  let debtorPrincipal = 0;
+  let debtorScheduled = 0;
+  let debtorCollected = 0;
+  let debtorOutstanding = 0;
+
+  let creditorPrincipal = 0;
+  let creditorScheduled = 0;
+  let creditorCollected = 0;
+  let creditorOutstanding = 0;
+
   for (const c of allContracts) {
-    totalPrincipal += asAmount(c.principal);
+    const p = partyMap.get(c.partyId);
+    const pAmt = asAmount(c.principal);
+    totalPrincipal += pAmt;
+    if (p?.role === "creditor") {
+      creditorPrincipal += pAmt;
+    } else {
+      debtorPrincipal += pAmt;
+    }
   }
 
   let overdueCount = 0;
@@ -852,6 +898,7 @@ export async function getDashboardStats(ownerId: number) {
     scheduleId: string;
     partyId: string;
     partyName: string;
+    partyRole: "debtor" | "creditor";
     contractId: string;
     contractTitle: string;
     installmentNo: number;
@@ -864,18 +911,34 @@ export async function getDashboardStats(ownerId: number) {
   for (const s of allSchedules) {
     const amount = asAmount(s.amount);
     const paidAmount = asAmount(s.paidAmount);
+    const party = partyMap.get(s.partyId);
+    const isCreditor = party?.role === "creditor";
+
     totalScheduled += amount;
     totalCollected += paidAmount;
+
+    if (isCreditor) {
+      creditorScheduled += amount;
+      creditorCollected += paidAmount;
+    } else {
+      debtorScheduled += amount;
+      debtorCollected += paidAmount;
+    }
 
     if (s.status === "pending") {
       const remainingOnSchedule = Math.max(0, amount - paidAmount);
       totalOutstanding += remainingOnSchedule;
 
+      if (isCreditor) {
+        creditorOutstanding += remainingOnSchedule;
+      } else {
+        debtorOutstanding += remainingOnSchedule;
+      }
+
       const due = asDate(s.dueDate);
       if (due) {
         const dueMs = Date.parse(`${due}T00:00:00+07:00`);
         const daysDiff = Math.round((dueMs - todayMs) / 86_400_000);
-        const party = partyMap.get(s.partyId);
         const contract = contractMap.get(s.contractId);
 
         if (daysDiff < 0) {
@@ -886,6 +949,7 @@ export async function getDashboardStats(ownerId: number) {
             scheduleId: s.id,
             partyId: s.partyId,
             partyName: party?.displayName || "ไม่ระบุชื่อ",
+            partyRole: party?.role || "debtor",
             contractId: s.contractId,
             contractTitle: contract?.title || "สัญญาเงินกู้",
             installmentNo: s.installmentNo,
@@ -902,6 +966,7 @@ export async function getDashboardStats(ownerId: number) {
             scheduleId: s.id,
             partyId: s.partyId,
             partyName: party?.displayName || "ไม่ระบุชื่อ",
+            partyRole: party?.role || "debtor",
             contractId: s.contractId,
             contractTitle: contract?.title || "สัญญาเงินกู้",
             installmentNo: s.installmentNo,
@@ -918,6 +983,7 @@ export async function getDashboardStats(ownerId: number) {
             scheduleId: s.id,
             partyId: s.partyId,
             partyName: party?.displayName || "ไม่ระบุชื่อ",
+            partyRole: party?.role || "debtor",
             contractId: s.contractId,
             contractTitle: contract?.title || "สัญญาเงินกู้",
             installmentNo: s.installmentNo,
@@ -932,6 +998,40 @@ export async function getDashboardStats(ownerId: number) {
   }
 
   alerts.sort((a, b) => a.daysDiff - b.daysDiff);
+
+  let totalInflow = 0;
+  let totalOutflow = 0;
+
+  for (const t of allTransactions) {
+    const amt = asAmount(t.amount);
+    const party = partyMap.get(t.partyId);
+    const isCreditor = party?.role === "creditor";
+
+    if (t.type === "payment") {
+      if (isCreditor) {
+        // We pay creditor -> Outflow
+        totalOutflow += amt;
+      } else {
+        // Debtor pays us -> Inflow
+        totalInflow += amt;
+      }
+    } else if (t.type === "disbursement") {
+      if (isCreditor) {
+        // We borrowed money -> Inflow
+        totalInflow += amt;
+      } else {
+        // We lent money out -> Outflow
+        totalOutflow += amt;
+      }
+    } else {
+      // adjustment
+      if (amt < 0) {
+        totalOutflow += Math.abs(amt);
+      } else {
+        totalInflow += amt;
+      }
+    }
+  }
 
   const monthlyTimelineMap = new Map<string, { month: string; scheduled: number; collected: number; pending: number }>();
   for (const s of allSchedules) {
@@ -960,6 +1060,16 @@ export async function getDashboardStats(ownerId: number) {
     totalScheduled,
     totalCollected,
     totalOutstanding,
+    debtorPrincipal,
+    debtorScheduled,
+    debtorCollected,
+    debtorOutstanding,
+    creditorPrincipal,
+    creditorScheduled,
+    creditorCollected,
+    creditorOutstanding,
+    totalInflow,
+    totalOutflow,
     projectedInterest: Math.max(0, totalScheduled - totalPrincipal),
     overdue: { count: overdueCount, amount: overdueAmount },
     today: { count: todayCount, amount: todayAmount },
@@ -1035,7 +1145,10 @@ export async function exportAllData(ownerId: number) {
     const contract = t.contractId ? contractMap.get(t.contractId) : null;
     return {
       transactionId: t.id,
+      partyId: t.partyId,
       partyName: party?.displayName || "—",
+      partyRole: party?.role || "debtor",
+      contractId: t.contractId,
       contractTitle: contract?.title || "—",
       type: t.type,
       amount: asAmount(t.amount),
