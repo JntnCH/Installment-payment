@@ -1,0 +1,38 @@
+name: Fix flex-col
+on:
+  push:
+    paths: ['.github/workflows/fix-flex-col.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('client/src/components/LoanCalculator.tsx')
+          t = p.read_text()
+          needle = '''                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="เช่น 3550"
+                    value={dailyActualReceived}'''
+          repl = '''                <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="เช่น 3550"
+                    value={dailyActualReceived}'''
+          if needle not in t:
+              raise SystemExit('needle missing')
+          p.write_text(t.replace(needle, repl, 1))
+          print('fixed')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src/components/LoanCalculator.tsx
+          git commit -m "fix(ui): flex-col for reset button row on mobile"
+          git push origin HEAD:main
