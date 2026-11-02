@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Restore from good commit and patch
+      - name: Restore from good commit and patch layout
         run: |
           set -euo pipefail
           git show c06edc8a44ae1b23514604f6ed85ed3a48a1f086:client/src/components/LoanCalculator.tsx > client/src/components/LoanCalculator.tsx
@@ -26,64 +26,50 @@ jobs:
           text = path.read_text()
           if text.strip() == 'PLACEHOLDER' or len(text) < 1000:
               raise SystemExit('restore failed')
+
+          old_wrap = '                <div className="flex gap-2">'
+          new_wrap = '                <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">'
+          if old_wrap not in text:
+              # may appear multiple times; only change the one near dailyActualReceived
+              idx = text.find('value={dailyActualReceived}')
+              if idx < 0:
+                  raise SystemExit('dailyActualReceived missing')
+              # search backwards for flex gap-2 near this input
+              window = text[max(0, idx-400):idx+800]
+              if 'flex gap-2' not in window:
+                  raise SystemExit('flex gap-2 near actual received missing')
           text = text.replace(
-              'import React, { useState, useMemo } from "react";',
-              'import React, { useState, useMemo, useEffect } from "react";',
+              '''                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="เช่น 3550"
+                    value={dailyActualReceived}''',
+              '''                <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="เช่น 3550"
+                    value={dailyActualReceived}''',
               1,
           )
-          old_btn = '''                  <button
-                    type="button"
-                    onClick={() => {
-                      const autoCalc = Math.max(0, dailyPrincipal - dailyFirstDeduct - dailyFee);
-                      setDailyActualReceived(autoCalc);
-                    }}
-                    className="px-3 h-10 rounded-[10px] bg-white border border-[#1C1917]/15 text-xs font-medium text-[#1C1917] hover:bg-[#1C1917]/5 cursor-pointer whitespace-nowrap"
-                  >
-                    ↺ รีเซ็ตตามค่าหัก (฿{(dailyPrincipal - dailyFirstDeduct - dailyFee).toLocaleString()})
-                  </button>'''
-          new_btn = '''                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const autoCalc = Math.max(0, Number(dailyPrincipal) - Number(dailyFirstDeduct) - Number(dailyFee));
-                      setDailyActualReceived(autoCalc);
-                      setDailyInputMode("by_payment");
-                      toast.success(`รีเซ็ตยอดได้รับจริงเป็น ฿${autoCalc.toLocaleString()}`);
-                    }}
-                    className="px-3 h-10 rounded-[10px] bg-white border border-[#1C1917]/15 text-xs font-medium text-[#1C1917] hover:bg-[#1C1917]/5 active:scale-95 cursor-pointer whitespace-nowrap touch-manipulation"
-                  >
-                    ↺ รีเซ็ตตามค่าหัก (฿{(dailyPrincipal - dailyFirstDeduct - dailyFee).toLocaleString()})
-                  </button>'''
-          if old_btn not in text:
-              raise SystemExit('button block missing after restore')
-          text = text.replace(old_btn, new_btn, 1)
-          old_input = '''                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      setDailyActualReceived(val);
-                    }}'''
-          new_input = '''                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      setDailyActualReceived(val);
-                      setDailyInputMode("by_actual_received");
-                    }}'''
-          text = text.replace(old_input, new_input, 1)
-          marker = '  const dailyResult = useMemo(() => {'
-          sync = '''  useEffect(() => {
-    if (dailyInputMode === "by_actual_received") return;
-    const autoCalc = Math.max(0, Number(dailyPrincipal) - Number(dailyFirstDeduct) - Number(dailyFee));
-    setDailyActualReceived(autoCalc);
-  }, [dailyPrincipal, dailyFirstDeduct, dailyFee, dailyInputMode]);
-
-  const dailyResult = useMemo(() => {'''
-          text = text.replace(marker, sync, 1)
+          text = text.replace(
+              'className="flex-1 h-10 px-3 bg-white border border-[#1C1917]/20 rounded-[10px] text-sm font-mono font-bold tabular-nums text-[#1C1917]"',
+              'className="w-full min-w-0 flex-1 h-10 px-3 bg-white border border-[#1C1917]/20 rounded-[10px] text-sm font-mono font-bold tabular-nums text-[#1C1917]"',
+              1,
+          )
+          text = text.replace(
+              'className="px-3 h-10 rounded-[10px] bg-white border border-[#1C1917]/15 text-xs font-medium text-[#1C1917] hover:bg-[#1C1917]/5 cursor-pointer whitespace-nowrap"',
+              'className="w-full sm:w-auto shrink-0 px-3 h-10 rounded-[10px] bg-white border border-[#1C1917]/15 text-xs font-medium text-[#1C1917] hover:bg-[#1C1917]/5 cursor-pointer text-center"',
+              1,
+          )
           path.write_text(text)
-          print('restored+patched', path.stat().st_size)
+          print('restored+layout-fixed', path.stat().st_size)
           PY
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add client/src/components/LoanCalculator.tsx
-          git commit -m "fix: restore LoanCalculator and make reset-by-deduction button work"
+          git commit -m "fix(ui): restore LoanCalculator; stack reset button on mobile"
           git push origin HEAD:main
