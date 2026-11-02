@@ -1,7 +1,9 @@
 name: Fix flex-col
 on:
+  workflow_dispatch: {}
   push:
-    paths: ['.github/workflows/fix-flex-col.yml']
+    paths:
+      - '.github/workflows/fix-flex-col.yml'
 permissions:
   contents: write
 jobs:
@@ -9,11 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          python3 - <<'PY'
+      - name: Patch layout
+        run: |
+          set -euo pipefail
+          python3 << 'PY'
           from pathlib import Path
           p = Path('client/src/components/LoanCalculator.tsx')
           t = p.read_text()
+          if t.strip() == 'PLACEHOLDER' or len(t) < 1000:
+              raise SystemExit('LoanCalculator invalid')
           needle = '''                <div className="flex gap-2">
                   <input
                     type="number"
@@ -27,12 +33,33 @@ jobs:
                     placeholder="เช่น 3550"
                     value={dailyActualReceived}'''
           if needle not in t:
-              raise SystemExit('needle missing')
-          p.write_text(t.replace(needle, repl, 1))
-          print('fixed')
+              if 'flex flex-col gap-2 sm:flex-row' in t:
+                  print('already fixed')
+              else:
+                  raise SystemExit('needle missing')
+          else:
+              t = t.replace(needle, repl, 1)
+              t = t.replace(
+                  'className="flex-1 h-10 px-3 bg-white border border-[#1C1917]/20 rounded-[10px] text-sm font-mono font-bold tabular-nums text-[#1C1917]"',
+                  'className="w-full min-w-0 flex-1 h-10 px-3 bg-white border border-[#1C1917]/20 rounded-[10px] text-sm font-mono font-bold tabular-nums text-[#1C1917]"',
+                  1,
+              )
+              t = t.replace(
+                  'className="px-3 h-10 rounded-[10px] bg-white border border-[#1C1917]/15 text-xs font-medium text-[#1C1917] hover:bg-[#1C1917]/5 cursor-pointer whitespace-nowrap"',
+                  'className="w-full sm:w-auto shrink-0 px-3 h-10 rounded-[10px] bg-white border border-[#1C1917]/15 text-xs font-medium text-[#1C1917] hover:bg-[#1C1917]/5 cursor-pointer text-center"',
+                  1,
+              )
+              p.write_text(t)
+              print('patched', p.stat().st_size)
           PY
+      - name: Commit
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add client/src/components/LoanCalculator.tsx
-          git commit -m "fix(ui): flex-col for reset button row on mobile"
-          git push origin HEAD:main
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "fix(ui): stack reset-fee button under input on mobile"
+            git push origin HEAD:main
+          fi
