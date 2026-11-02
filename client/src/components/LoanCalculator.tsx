@@ -530,7 +530,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                   </label>
                   <span className="text-[11px] text-[#78716C]">กรอกเพื่อปรับยอดอัตโนมัติ</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                   <input
                     type="number"
                     min="0"
