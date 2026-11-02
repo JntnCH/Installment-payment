@@ -17,40 +17,37 @@ jobs:
           python3 << 'PY'
           from pathlib import Path
           p = Path('client/src/components/LoanCalculator.tsx')
-          t = p.read_text()
-          if t.strip() == 'PLACEHOLDER' or len(t) < 1000:
-              raise SystemExit('LoanCalculator invalid')
-          needle = '''                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="เช่น 3550"
-                    value={dailyActualReceived}'''
-          repl = '''                <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="เช่น 3550"
-                    value={dailyActualReceived}'''
-          if needle not in t:
-              if 'flex flex-col gap-2 sm:flex-row' in t:
+          t = p.read_text(encoding='utf-8')
+          print('size', len(t))
+          if 'PLACEHOLDER' in t and len(t) < 100:
+              raise SystemExit('placeholder file')
+          key = 'value={dailyActualReceived}'
+          idx = t.find(key)
+          if idx < 0:
+              raise SystemExit('dailyActualReceived missing')
+          # find nearest flex gap-2 before this input
+          window_start = max(0, idx - 250)
+          window = t[window_start:idx]
+          pos = window.rfind('className="flex gap-2"')
+          if pos < 0:
+              if 'flex flex-col gap-2 sm:flex-row' in t[window_start:idx+50]:
                   print('already fixed')
-              else:
-                  raise SystemExit('needle missing')
-          else:
-              t = t.replace(needle, repl, 1)
-              t = t.replace(
-                  'className="flex-1 h-10 px-3 bg-white border border-[#1C1917]/20 rounded-[10px] text-sm font-mono font-bold tabular-nums text-[#1C1917]"',
-                  'className="w-full min-w-0 flex-1 h-10 px-3 bg-white border border-[#1C1917]/20 rounded-[10px] text-sm font-mono font-bold tabular-nums text-[#1C1917]"',
-                  1,
-              )
-              t = t.replace(
-                  'className="px-3 h-10 rounded-[10px] bg-white border border-[#1C1917]/15 text-xs font-medium text-[#1C1917] hover:bg-[#1C1917]/5 cursor-pointer whitespace-nowrap"',
-                  'className="w-full sm:w-auto shrink-0 px-3 h-10 rounded-[10px] bg-white border border-[#1C1917]/15 text-xs font-medium text-[#1C1917] hover:bg-[#1C1917]/5 cursor-pointer text-center"',
-                  1,
-              )
-              p.write_text(t)
-              print('patched', p.stat().st_size)
+                  raise SystemExit(0)
+              raise SystemExit('flex gap-2 not found near input')
+          abs_pos = window_start + pos
+          old = 'className="flex gap-2"'
+          new = 'className="flex flex-col gap-2 sm:flex-row sm:items-stretch"'
+          t = t[:abs_pos] + new + t[abs_pos + len(old):]
+          # button class near this section
+          btn_old = 'cursor-pointer whitespace-nowrap'
+          btn_new = 'cursor-pointer text-center w-full sm:w-auto shrink-0'
+          # only first occurrence after the actual-received block
+          after = t.find(key)
+          region = t[after:after+1200]
+          if btn_old in region:
+              t = t[:after] + region.replace(btn_old, btn_new, 1) + t[after+1200:]
+          p.write_text(t, encoding='utf-8')
+          print('patched ok', p.stat().st_size)
           PY
       - name: Commit
         run: |
