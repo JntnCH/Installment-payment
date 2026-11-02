@@ -45,6 +45,49 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
+function isDemoId(id: unknown): boolean {
+  return typeof id === "string" && id.startsWith("demo-");
+}
+
+function stripDemoExport(data: Awaited<ReturnType<typeof exportAllData>>) {
+  return {
+    ...data,
+    parties: (data.parties || []).filter(p => !isDemoId((p as any).partyId || (p as any).id)),
+    contracts: (data.contracts || []).filter(c => !isDemoId((c as any).contractId || (c as any).id)),
+    schedules: (data.schedules || []).filter(s => !isDemoId((s as any).scheduleId || (s as any).id)),
+    transactions: (data.transactions || []).filter(t => !isDemoId((t as any).transactionId || (t as any).id)),
+  };
+}
+
+function emptyStats() {
+  return {
+    debtorCount: 0,
+    creditorCount: 0,
+    totalParties: 0,
+    totalContracts: 0,
+    activeContracts: 0,
+    totalPrincipal: 0,
+    totalScheduled: 0,
+    totalCollected: 0,
+    totalOutstanding: 0,
+    debtorPrincipal: 0,
+    debtorScheduled: 0,
+    debtorCollected: 0,
+    debtorOutstanding: 0,
+    creditorPrincipal: 0,
+    creditorScheduled: 0,
+    creditorCollected: 0,
+    creditorOutstanding: 0,
+    totalInflow: 0,
+    totalOutflow: 0,
+    projectedInterest: 0,
+    overdue: { count: 0, amount: 0 },
+    today: { count: 0, amount: 0 },
+    soon: { count: 0, amount: 0 },
+    alerts: [] as unknown[],
+  };
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -52,12 +95,9 @@ export const appRouter = router({
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
+      return { success: true } as const;
     }),
   }),
-  /** Real financial data from Google Sheets (via backend-admin) */
   sheets: router({
     configured: publicProcedure.query(() => ({
       configured: sheetsProxyConfigured(),
@@ -69,10 +109,7 @@ export const appRouter = router({
       } catch (err) {
         throw new TRPCError({
           code: "BAD_GATEWAY",
-          message:
-            err instanceof Error
-              ? err.message
-              : "อ่านยอดจาก Google Sheets ไม่สำเร็จ",
+          message: err instanceof Error ? err.message : "อ่านยอดจาก Google Sheets ไม่สำเร็จ",
         });
       }
     }),
@@ -84,10 +121,7 @@ export const appRouter = router({
         } catch (err) {
           throw new TRPCError({
             code: "BAD_GATEWAY",
-            message:
-              err instanceof Error
-                ? err.message
-                : "อ่านรายการจาก Google Sheets ไม่สำเร็จ",
+            message: err instanceof Error ? err.message : "อ่านรายการจาก Google Sheets ไม่สำเร็จ",
           });
         }
       }),
@@ -110,15 +144,27 @@ export const appRouter = router({
         } catch (err) {
           throw new TRPCError({
             code: "BAD_GATEWAY",
-            message:
-              err instanceof Error ? err.message : "บันทึกลง Google Sheets ไม่สำเร็จ",
+            message: err instanceof Error ? err.message : "บันทึกลง Google Sheets ไม่สำเร็จ",
           });
         }
       }),
   }),
   ledger: router({
-    getStats: protectedProcedure.query(({ ctx }) => getDashboardStats(ctx.user.id)),
-    exportData: protectedProcedure.query(({ ctx }) => exportAllData(ctx.user.id)),
+    getStats: protectedProcedure.query(async ({ ctx }) => {
+      const stats = await getDashboardStats(ctx.user.id);
+      const alerts = (stats.alerts || []).filter(a => !isDemoId((a as any).partyId) && !isDemoId((a as any).contractId) && !isDemoId((a as any).scheduleId));
+      // If only demo data existed, return empty operational stats
+      if ((stats.totalParties || 0) > 0 && alerts.length === 0 && (stats.totalContracts || 0) > 0) {
+        const parties = await listLedgerParties(ctx.user.id);
+        const realParties = (parties || []).filter(p => !isDemoId((p as any).partyId || (p as any).id));
+        if (realParties.length === 0) return { ...emptyStats(), source: "real-only" };
+      }
+      return { ...stats, alerts };
+    }),
+    exportData: protectedProcedure.query(async ({ ctx }) => {
+      const data = await exportAllData(ctx.user.id);
+      return stripDemoExport(data);
+    }),
     syncGoogleSheets: protectedProcedure
       .input(webhookSyncInputSchema)
       .mutation(({ ctx, input }) =>
@@ -126,18 +172,21 @@ export const appRouter = router({
       ),
     callDialogflowService: publicProcedure
       .input(dialogflowServiceSchema)
-      .mutation(async ({ input }) => {
-        return callDialogflowServiceEndpoint(input);
-      }),
+      .mutation(async ({ input }) => callDialogflowServiceEndpoint(input)),
     listParties: protectedProcedure
       .input(partyRoleSchema.optional())
-      .query(({ ctx, input }) => listLedgerParties(ctx.user.id, input)),
+      .query(async ({ ctx, input }) => {
+        const parties = await listLedgerParties(ctx.user.id, input);
+        return (parties || []).filter(p => !isDemoId((p as any).partyId || (p as any).id));
+      }),
     getParty: protectedProcedure.input(ledgerIdInputSchema).query(async ({ ctx, input }) => {
+      if (isDemoId(input.id)) throw new TRPCError({ code: "NOT_FOUND", message: "ไม่พบบัญชีคู่สัญญา" });
       const result = await getPartyLedger(ctx.user.id, input.id);
       if (!result) throw new TRPCError({ code: "NOT_FOUND", message: "ไม่พบบัญชีคู่สัญญา" });
       return result;
     }),
     getContract: protectedProcedure.input(ledgerIdInputSchema).query(async ({ ctx, input }) => {
+      if (isDemoId(input.id)) throw new TRPCError({ code: "NOT_FOUND", message: "ไม่พบสัญญา" });
       const result = await getContractLedger(ctx.user.id, input.id);
       if (!result) throw new TRPCError({ code: "NOT_FOUND", message: "ไม่พบสัญญา" });
       return result;
@@ -152,7 +201,6 @@ export const appRouter = router({
       .input(transactionInputSchema)
       .mutation(async ({ ctx, input }) => {
         const created = await createLedgerTransaction(ctx.user.id, input);
-        // Dual-write real money movement into Google Sheets when proxy is configured
         if (sheetsProxyConfigured() && Number(input.amount) > 0) {
           try {
             await createSheetsTransaction({
@@ -165,10 +213,7 @@ export const appRouter = router({
               note: input.note || "",
             });
           } catch (err) {
-            console.warn(
-              "[sheets dual-write]",
-              err instanceof Error ? err.message : err,
-            );
+            console.warn("[sheets dual-write]", err instanceof Error ? err.message : err);
           }
         }
         return created;
