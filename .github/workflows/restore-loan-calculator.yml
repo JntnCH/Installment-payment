@@ -1,0 +1,89 @@
+name: Restore LoanCalculator
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - '.github/workflows/restore-loan-calculator.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore from good commit and patch
+        run: |
+          set -euo pipefail
+          git show c06edc8a44ae1b23514604f6ed85ed3a48a1f086:client/src/components/LoanCalculator.tsx > client/src/components/LoanCalculator.tsx
+          python3 << 'PY'
+          from pathlib import Path
+          path = Path('client/src/components/LoanCalculator.tsx')
+          text = path.read_text()
+          if text.strip() == 'PLACEHOLDER' or len(text) < 1000:
+              raise SystemExit('restore failed')
+          text = text.replace(
+              'import React, { useState, useMemo } from "react";',
+              'import React, { useState, useMemo, useEffect } from "react";',
+              1,
+          )
+          old_btn = '''                  <button
+                    type="button"
+                    onClick={() => {
+                      const autoCalc = Math.max(0, dailyPrincipal - dailyFirstDeduct - dailyFee);
+                      setDailyActualReceived(autoCalc);
+                    }}
+                    className="px-3 h-10 rounded-[10px] bg-white border border-[#1C1917]/15 text-xs font-medium text-[#1C1917] hover:bg-[#1C1917]/5 cursor-pointer whitespace-nowrap"
+                  >
+                    ↺ รีเซ็ตตามค่าหัก (฿{(dailyPrincipal - dailyFirstDeduct - dailyFee).toLocaleString()})
+                  </button>'''
+          new_btn = '''                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const autoCalc = Math.max(0, Number(dailyPrincipal) - Number(dailyFirstDeduct) - Number(dailyFee));
+                      setDailyActualReceived(autoCalc);
+                      setDailyInputMode("by_payment");
+                      toast.success(`รีเซ็ตยอดได้รับจริงเป็น ฿${autoCalc.toLocaleString()}`);
+                    }}
+                    className="px-3 h-10 rounded-[10px] bg-white border border-[#1C1917]/15 text-xs font-medium text-[#1C1917] hover:bg-[#1C1917]/5 active:scale-95 cursor-pointer whitespace-nowrap touch-manipulation"
+                  >
+                    ↺ รีเซ็ตตามค่าหัก (฿{(dailyPrincipal - dailyFirstDeduct - dailyFee).toLocaleString()})
+                  </button>'''
+          if old_btn not in text:
+              raise SystemExit('button block missing after restore')
+          text = text.replace(old_btn, new_btn, 1)
+          old_input = '''                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setDailyActualReceived(val);
+                    }}'''
+          new_input = '''                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setDailyActualReceived(val);
+                      setDailyInputMode("by_actual_received");
+                    }}'''
+          text = text.replace(old_input, new_input, 1)
+          marker = '  const dailyResult = useMemo(() => {'
+          sync = '''  useEffect(() => {
+    if (dailyInputMode === "by_actual_received") return;
+    const autoCalc = Math.max(0, Number(dailyPrincipal) - Number(dailyFirstDeduct) - Number(dailyFee));
+    setDailyActualReceived(autoCalc);
+  }, [dailyPrincipal, dailyFirstDeduct, dailyFee, dailyInputMode]);
+
+  const dailyResult = useMemo(() => {'''
+          text = text.replace(marker, sync, 1)
+          path.write_text(text)
+          print('restored+patched', path.stat().st_size)
+          PY
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src/components/LoanCalculator.tsx
+          git commit -m "fix: restore LoanCalculator and make reset-by-deduction button work"
+          git push origin HEAD:main
