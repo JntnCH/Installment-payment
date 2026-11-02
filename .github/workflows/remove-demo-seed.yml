@@ -1,0 +1,63 @@
+name: Remove demo seed
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - '.github/workflows/remove-demo-seed.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Empty memory seed
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+          path = Path('server/ledger.ts')
+          text = path.read_text()
+          start = text.find('function initializeMemoryStore')
+          if start < 0:
+              raise SystemExit('initializeMemoryStore not found')
+          # find opening brace of function
+          brace = text.find('{', start)
+          # match braces
+          i = brace
+          depth = 0
+          while i < len(text):
+              if text[i] == '{':
+                  depth += 1
+              elif text[i] == '}':
+                  depth -= 1
+                  if depth == 0:
+                      end = i + 1
+                      break
+              i += 1
+          else:
+              raise SystemExit('could not match braces')
+
+          replacement = '''function initializeMemoryStore(ownerId: number = 1) {
+  // Real-data mode: do NOT seed demo parties/contracts.
+  // Ledger starts empty until the user creates real records.
+  // Cashflow/balance should come from Google Sheets via sheets.* tRPC routes.
+  if (memoryInitialized) return;
+  memoryInitialized = true;
+}'''
+          new_text = text[:start] + replacement + text[end:]
+          path.write_text(new_text)
+          print('patched', path.stat().st_size)
+          if 'demo-party-somchai' in new_text:
+              # may still appear elsewhere — ok if only in comments
+              print('warning: demo string still present')
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/ledger.ts
+          git diff --staged --quiet || git commit -m "fix: remove demo ledger seed — real data only"
+          git push origin HEAD:main
