@@ -367,7 +367,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
       {/* 2. Loan Type Selector Tabs */}
       <div className="flex items-center gap-1.5 p-1 bg-[#FFFCF8] rounded-full border border-[#1C1917]/10 overflow-x-auto scrollbar-thin">
         {[
-          { id: "daily_informal" as LoanType, label: "เงินกู้รายวันนอกระบบ (จ่ายรายวัน)" },
+          { id: "daily_informal" as LoanType, label: "เงินกู้นอกระบบ (รายวัน/รายเดือน)" },
           { id: "floating_interest" as LoanType, label: "เงินกู้ดอกลอย (ส่งเฉพาะดอก)" },
           { id: "flat_installment" as LoanType, label: "ผ่อนสินค้าดอกคงที่" },
           { id: "effective_amortization" as LoanType, label: "ลดต้นลดดอก" },
@@ -672,16 +672,22 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                   <label className="block text-xs font-medium text-[#1C1917] mb-1">
                     รอบการส่งดอก
                   </label>
-                  <select
-                    value={floatingCycle}
-                    onChange={(e: any) => setFloatingCycle(e.target.value)}
-                    className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917]"
-                  >
-                    <option value="monthly">รายเดือน (ทุก 1 เดือน)</option>
-                    <option value="biweekly">ราย 15 วัน</option>
-                    <option value="weekly">รายสัปดาห์ (ทุก 7 วัน)</option>
-                    <option value="daily">รายวัน</option>
-                  </select>
+                  {myRole === "debtor" ? (
+                    <div className="h-10 flex items-center px-3 bg-[#F6F4F0] border border-[#1C1917]/10 rounded-[10px] text-sm text-[#1C1917]">
+                      {debtorFrequency === "daily" ? "รายวัน" : "รายเดือน"}
+                    </div>
+                  ) : (
+                    <select
+                      value={floatingCycle}
+                      onChange={(e: any) => setFloatingCycle(e.target.value)}
+                      className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917]"
+                    >
+                      <option value="monthly">รายเดือน (ทุก 1 เดือน)</option>
+                      <option value="biweekly">ราย 15 วัน</option>
+                      <option value="weekly">รายสัปดาห์ (ทุก 7 วัน)</option>
+                      <option value="daily">รายวัน</option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-[#1C1917] mb-1">
