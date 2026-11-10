@@ -81,10 +81,11 @@ export interface DailyLoanParams {
   actualReceivedAmount?: number; // จำนวนเงินที่ได้รับจริง (เช่น 3,550)
   startDate: string;
   skipSundays?: boolean;
+  frequency?: "daily" | "monthly";
 }
 
 export function calculateDailyLoan(params: DailyLoanParams) {
-  const { principal, days, feeAmount, firstDeductAmount, actualReceivedAmount, startDate, skipSundays } = params;
+  const { principal, days, feeAmount, firstDeductAmount, actualReceivedAmount, startDate, skipSundays, frequency = "daily" } = params;
   const safeDays = Math.max(1, days);
   const safePrincipal = Math.max(0, principal);
 
@@ -126,7 +127,7 @@ export function calculateDailyLoan(params: DailyLoanParams) {
   const dailyRate = safeDays > 0 ? ratePercent / safeDays : 0;
 
   // Annualized Rate approximation
-  const durationInYears = safeDays / 365;
+  const durationInYears = frequency === "monthly" ? safeDays / 12 : safeDays / 365;
   const effectiveAPR = durationInYears > 0 ? (totalCost / Math.max(1, netDisbursed)) / durationInYears * 100 : 0;
 
   const schedules: GeneratedScheduleItem[] = [];
@@ -134,7 +135,7 @@ export function calculateDailyLoan(params: DailyLoanParams) {
   const currentInterestPart = safeDays > 0 ? interest / safeDays : interest;
 
   for (let i = 1; i <= safeDays; i++) {
-    const dueDate = addDays(startDate, i - 1, skipSundays);
+    const dueDate = frequency === "monthly" ? addMonths(startDate, i - 1) : addDays(startDate, i - 1, skipSundays);
     schedules.push({
       installmentNo: i,
       dueDate,
@@ -221,7 +222,7 @@ export interface FlatInstallmentParams {
   ratePercent?: number; // ดอกเบี้ยทั้งสัญญา (%)
   installmentCount: number; // จำนวนงวด (เช่น 12)
   installmentAmount?: number; // ค่างวดต่อรอบ (เช่น 1,500 บาท/งวด)
-  frequency?: "monthly" | "biweekly" | "weekly"; // 1 เดือน, 15 วัน, 7 วัน
+  frequency?: "daily" | "monthly" | "biweekly" | "weekly"; // 1 เดือน, 15 วัน, 7 วัน
   startDate: string;
   calcMode?: "by_price_rate" | "by_installment"; // โหมดคำนวณ: รู้ราคา+ดอกเบี้ย หรือ รู้ค่างวด
 }
@@ -288,7 +289,8 @@ export function calculateFlatInstallment(params: FlatInstallmentParams) {
     let dueDate = startDate;
     if (frequency === "monthly") dueDate = addMonths(startDate, i - 1);
     else if (frequency === "weekly") dueDate = addWeeks(startDate, i - 1);
-    else dueDate = addDays(startDate, (i - 1) * 15);
+    else if (frequency === "biweekly") dueDate = addDays(startDate, (i - 1) * 15);
+    else dueDate = addDays(startDate, i - 1);
 
     schedules.push({
       installmentNo: i,
@@ -296,12 +298,12 @@ export function calculateFlatInstallment(params: FlatInstallmentParams) {
       amount: perInstallment,
       principalPart: principal / safeCount,
       interestPart: calculatedInterest / safeCount,
-      note: `งวดที่ ${i}/${safeCount} (${frequency === "weekly" ? "7 วัน" : frequency === "biweekly" ? "15 วัน" : "1 เดือน"})`,
+      note: `งวดที่ ${i}/${safeCount} (${frequency === "daily" ? "1 วัน" : frequency === "weekly" ? "7 วัน" : frequency === "biweekly" ? "15 วัน" : "1 เดือน"})`,
     });
   }
 
   const cycleLabel =
-    frequency === "weekly" ? "ทุก 7 วัน" : frequency === "biweekly" ? "ทุก 15 วัน" : "รายเดือน (1 เดือน)";
+    frequency === "daily" ? "ทุกวัน" : frequency === "weekly" ? "ทุก 7 วัน" : frequency === "biweekly" ? "ทุก 15 วัน" : "รายเดือน (1 เดือน)";
 
   return {
     price: calculatedPrice,
@@ -324,18 +326,19 @@ export interface AmortizationParams {
   annualRate: number; // e.g. 7.5% per annum
   months: number;
   startDate: string;
+  frequency?: "daily" | "monthly";
 }
 
 export function calculateAmortization(params: AmortizationParams) {
-  const { principal, annualRate, months, startDate } = params;
+  const { principal, annualRate, months, startDate, frequency = "monthly" } = params;
   const safeMonths = Math.max(1, months);
-  const monthlyRate = annualRate / 100 / 12;
+  const periodRate = annualRate / 100 / (frequency === "daily" ? 365 : 12);
 
   let monthlyPayment = 0;
-  if (monthlyRate === 0) {
+  if (periodRate === 0) {
     monthlyPayment = principal / safeMonths;
   } else {
-    monthlyPayment = (principal * monthlyRate * Math.pow(1 + monthlyRate, safeMonths)) / (Math.pow(1 + monthlyRate, safeMonths) - 1);
+    monthlyPayment = (principal * periodRate * Math.pow(1 + periodRate, safeMonths)) / (Math.pow(1 + periodRate, safeMonths) - 1);
   }
 
   const schedules: GeneratedScheduleItem[] = [];
@@ -343,25 +346,26 @@ export function calculateAmortization(params: AmortizationParams) {
   let totalInterest = 0;
 
   for (let i = 1; i <= safeMonths; i++) {
-    const interestPart = remaining * monthlyRate;
+    const interestPart = remaining * periodRate;
     const principalPart = monthlyPayment - interestPart;
     remaining = Math.max(0, remaining - principalPart);
     totalInterest += interestPart;
 
     schedules.push({
       installmentNo: i,
-      dueDate: addMonths(startDate, i - 1),
+      dueDate: frequency === "daily" ? addDays(startDate, i - 1) : addMonths(startDate, i - 1),
       amount: monthlyPayment,
       principalPart,
       interestPart,
       remainingBalance: remaining,
-      note: `งวดที่ ${i} (ต้น ${formatMoney(principalPart)} ดอก ${formatMoney(interestPart)})`,
+      note: `งวดที่ ${i} (${frequency === "daily" ? "รายวัน" : "รายเดือน"}: ต้น ${formatMoney(principalPart)} ดอก ${formatMoney(interestPart)})`,
     });
   }
 
   return {
     principal,
     monthlyPayment,
+    paymentFrequency: frequency,
     totalPayment: monthlyPayment * safeMonths,
     totalInterest,
     schedules,
