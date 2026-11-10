@@ -622,17 +622,19 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                     className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917]"
                   />
                 </div>
-                <div className="flex items-end pb-2">
-                  <label className="flex items-center gap-2 text-xs text-[#1C1917] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={dailySkipSunday}
-                      onChange={(e) => setDailySkipSunday(e.target.checked)}
-                      className="rounded border-[#1C1917]/20 text-[#1C1917]"
-                    />
-                    <span>เว้นวันอาทิตย์</span>
-                  </label>
-                </div>
+                {myRole !== "debtor" || debtorFrequency === "daily" ? (
+                  <div className="flex items-end pb-2">
+                    <label className="flex items-center gap-2 text-xs text-[#1C1917] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={dailySkipSunday}
+                        onChange={(e) => setDailySkipSunday(e.target.checked)}
+                        className="rounded border-[#1C1917]/20 text-[#1C1917]"
+                      />
+                      <span>เว้นวันอาทิตย์</span>
+                    </label>
+                  </div>
+                ) : null}
               </div>
             </div>
           )}
