@@ -30,140 +30,11 @@ type ContractRow = typeof contracts.$inferSelect;
 type ScheduleRow = typeof contractPaymentSchedules.$inferSelect;
 type TransactionRow = typeof ledgerTransactions.$inferSelect;
 
-// In-memory fallback stores for local/preview environment when DATABASE_URL is not set
+// In-memory fallback stores when DATABASE_URL is not set. They start empty by design.
 const memoryParties = new Map<string, PartyRow>();
 const memoryContracts = new Map<string, ContractRow>();
 const memorySchedules = new Map<string, ScheduleRow>();
 const memoryTransactions = new Map<string, TransactionRow>();
-
-let memoryInitialized = false;
-
-function initializeMemoryStore(ownerId: number = 1) {
-  if (memoryInitialized) return;
-  memoryInitialized = true;
-
-  const now = new Date();
-  const party1Id = "demo-party-somchai";
-  const party2Id = "demo-party-kanya";
-  const party3Id = "demo-party-bank";
-
-  // Debtor 1
-  memoryParties.set(party1Id, {
-    id: party1Id,
-    ownerId,
-    displayName: "สมชาย วัฒนากูล",
-    role: "debtor",
-    phone: "081-234-5678",
-    note: "ลูกค้าผ่อนชำระโทรศัพท์มือถือและอุปกรณ์",
-    status: "active",
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  // Debtor 2
-  memoryParties.set(party2Id, {
-    id: party2Id,
-    ownerId,
-    displayName: "กัญญา อารีย์สุข",
-    role: "debtor",
-    phone: "089-876-5432",
-    note: "ลูกค้าประจำ ผ่อนคอมพิวเตอร์โน้ตบุ๊ก",
-    status: "active",
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  // Creditor 1
-  memoryParties.set(party3Id, {
-    id: party3Id,
-    ownerId,
-    displayName: "ธนาคารพัฒนาการค้า",
-    role: "creditor",
-    phone: "02-123-4567",
-    note: "วงเงินกู้หมุนเวียนธุรกิจระยะสั้น",
-    status: "active",
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  // Contract for Somchai
-  const contract1Id = "demo-contract-phone";
-  const startDate1 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  memoryContracts.set(contract1Id, {
-    id: contract1Id,
-    ownerId,
-    partyId: party1Id,
-    title: "สัญญาผ่อน iPhone 16 Pro 256GB",
-    principal: "42000.00",
-    interestRate: "0.0000",
-    installmentCount: 6,
-    startDate: startDate1,
-    status: "active",
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  // Schedules for Somchai (6 installments: 1 paid, 1 today/due, 4 upcoming)
-  const amount1 = "7000.00";
-  for (let i = 1; i <= 6; i++) {
-    const scheduleId = `demo-schedule-c1-${i}`;
-    const scheduleDate = new Date(Date.now() + (i - 2) * 30 * 86400000).toISOString().slice(0, 10);
-    const isPaid = i === 1;
-    memorySchedules.set(scheduleId, {
-      id: scheduleId,
-      ownerId,
-      partyId: party1Id,
-      contractId: contract1Id,
-      installmentNo: i,
-      dueDate: scheduleDate,
-      amount: amount1,
-      paidAmount: isPaid ? amount1 : "0.00",
-      status: isPaid ? "paid" : "pending",
-      paidAt: isPaid ? new Date(Date.now() - 28 * 86400000) : null,
-      note: `งวดที่ ${i}`,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-
-  // Contract for Kanya
-  const contract2Id = "demo-contract-laptop";
-  const startDate2 = new Date().toISOString().slice(0, 10);
-  memoryContracts.set(contract2Id, {
-    id: contract2Id,
-    ownerId,
-    partyId: party2Id,
-    title: "สัญญาผ่อน MacBook Air M3",
-    principal: "39000.00",
-    interestRate: "0.0000",
-    installmentCount: 3,
-    startDate: startDate2,
-    status: "active",
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  // Schedules for Kanya
-  for (let i = 1; i <= 3; i++) {
-    const scheduleId = `demo-schedule-c2-${i}`;
-    const scheduleDate = new Date(Date.now() + (i - 1) * 30 * 86400000).toISOString().slice(0, 10);
-    memorySchedules.set(scheduleId, {
-      id: scheduleId,
-      ownerId,
-      partyId: party2Id,
-      contractId: contract2Id,
-      installmentNo: i,
-      dueDate: scheduleDate,
-      amount: "13000.00",
-      paidAmount: "0.00",
-      status: "pending",
-      paidAt: null,
-      note: `งวดที่ ${i}`,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-}
 
 function toParty(row: PartyRow) {
   return {
@@ -227,7 +98,6 @@ async function getOwnedParty(ownerId: number, partyId: string) {
       .limit(1);
     return party ?? null;
   }
-  initializeMemoryStore(ownerId);
   const p = memoryParties.get(partyId);
   return p && p.ownerId === ownerId ? p : null;
 }
@@ -242,7 +112,6 @@ async function getOwnedContract(ownerId: number, contractId: string) {
       .limit(1);
     return contract ?? null;
   }
-  initializeMemoryStore(ownerId);
   const c = memoryContracts.get(contractId);
   return c && c.ownerId === ownerId ? c : null;
 }
@@ -257,8 +126,6 @@ export async function listLedgerParties(ownerId: number, role?: "debtor" | "cred
       .orderBy(asc(parties.displayName));
     return rows.map(toParty);
   }
-
-  initializeMemoryStore(ownerId);
   const result: PartyRow[] = [];
   for (const party of Array.from(memoryParties.values())) {
     if (party.ownerId === ownerId && (!role || party.role === role)) {
@@ -300,8 +167,6 @@ export async function getPartyLedger(ownerId: number, partyId: string) {
       transactions: [...scheduleRows.map(toScheduleTransaction), ...transactionRows.map(toLedgerTransaction)],
     };
   }
-
-  initializeMemoryStore(ownerId);
   const partyContracts: ContractRow[] = [];
   for (const c of Array.from(memoryContracts.values())) {
     if (c.ownerId === ownerId && c.partyId === partyId) {
@@ -358,8 +223,6 @@ export async function getContractLedger(ownerId: number, contractId: string) {
       transactions: [...schedules.map(toScheduleTransaction), ...transactionRows.map(toLedgerTransaction)],
     };
   }
-
-  initializeMemoryStore(ownerId);
   const schedules: ScheduleRow[] = [];
   for (const s of Array.from(memorySchedules.values())) {
     if (s.ownerId === ownerId && s.contractId === contractId) {
@@ -392,8 +255,6 @@ export async function createLedgerParty(ownerId: number, input: PartyInput) {
     await db.insert(parties).values({ id, ownerId, ...input, status: "active" });
     return getOwnedParty(ownerId, id).then(row => (row ? toParty(row) : null));
   }
-
-  initializeMemoryStore(ownerId);
   const row: PartyRow = {
     id,
     ownerId,
@@ -427,8 +288,6 @@ export async function updateLedgerParty(ownerId: number, input: PartyUpdateInput
       .where(and(eq(parties.ownerId, ownerId), eq(parties.id, input.id)));
     return getOwnedParty(ownerId, input.id).then(row => (row ? toParty(row) : null));
   }
-
-  initializeMemoryStore(ownerId);
   const updated: PartyRow = {
     ...party,
     displayName: input.displayName ?? party.displayName,
@@ -508,8 +367,6 @@ export async function createLedgerContract(ownerId: number, input: ContractInput
 
     return getContractLedger(ownerId, contractId);
   }
-
-  initializeMemoryStore(ownerId);
   const contractRow: ContractRow = {
     id: contractId,
     ownerId,
@@ -566,8 +423,6 @@ export async function updateLedgerContract(ownerId: number, input: ContractUpdat
       .where(and(eq(contracts.ownerId, ownerId), eq(contracts.id, input.id)));
     return getContractLedger(ownerId, input.id);
   }
-
-  initializeMemoryStore(ownerId);
   const updated: ContractRow = {
     ...contract,
     title: input.title ?? contract.title,
@@ -615,8 +470,6 @@ export async function createLedgerTransaction(ownerId: number, input: Transactio
       .limit(1);
     return row ? toLedgerTransaction(row) : null;
   }
-
-  initializeMemoryStore(ownerId);
   const row: TransactionRow = {
     id,
     ownerId,
@@ -659,8 +512,6 @@ export async function updateLedgerSchedule(ownerId: number, input: ScheduleUpdat
       .limit(1);
     return updated ? toScheduleTransaction(updated) : null;
   }
-
-  initializeMemoryStore(ownerId);
   const s = memorySchedules.get(input.id);
   if (!s || s.ownerId !== ownerId) throw new Error("ไม่พบงวดชำระที่เลือก");
   if (s.status !== "pending") throw new Error("แก้ไขได้เฉพาะงวดที่ยังรอชำระ");
@@ -701,8 +552,6 @@ export async function updateLedgerTransaction(ownerId: number, input: Transactio
       .limit(1);
     return updated ? toLedgerTransaction(updated) : null;
   }
-
-  initializeMemoryStore(ownerId);
   const t = memoryTransactions.get(input.id);
   if (!t || t.ownerId !== ownerId) throw new Error("ไม่พบธุรกรรมที่เลือก");
   const updated: TransactionRow = {
@@ -751,8 +600,6 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
       .limit(1);
     return updated ? toScheduleTransaction(updated) : null;
   }
-
-  initializeMemoryStore(ownerId);
   const s = memorySchedules.get(input.scheduleId);
   if (!s || s.ownerId !== ownerId) throw new Error("ไม่พบงวดชำระที่เลือก");
 
@@ -788,8 +635,6 @@ export async function deleteLedgerParty(ownerId: number, partyId: string) {
     await db.delete(ledgerTransactions).where(and(eq(ledgerTransactions.ownerId, ownerId), eq(ledgerTransactions.partyId, partyId)));
     return { success: true };
   }
-
-  initializeMemoryStore(ownerId);
   memoryParties.delete(partyId);
   for (const [id, c] of Array.from(memoryContracts.entries())) {
     if (c.partyId === partyId) memoryContracts.delete(id);
@@ -811,8 +656,6 @@ export async function deleteLedgerContract(ownerId: number, contractId: string) 
     await db.delete(ledgerTransactions).where(and(eq(ledgerTransactions.ownerId, ownerId), eq(ledgerTransactions.contractId, contractId)));
     return { success: true };
   }
-
-  initializeMemoryStore(ownerId);
   memoryContracts.delete(contractId);
   for (const [id, s] of Array.from(memorySchedules.entries())) {
     if (s.contractId === contractId) memorySchedules.delete(id);
@@ -829,8 +672,6 @@ export async function deleteLedgerTransaction(ownerId: number, transactionId: st
     await db.delete(ledgerTransactions).where(and(eq(ledgerTransactions.ownerId, ownerId), eq(ledgerTransactions.id, transactionId)));
     return { success: true };
   }
-
-  initializeMemoryStore(ownerId);
   memoryTransactions.delete(transactionId);
   return { success: true };
 }
@@ -849,7 +690,6 @@ export async function getDashboardStats(ownerId: number) {
     allSchedules = await db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.ownerId, ownerId));
     allTransactions = await db.select().from(ledgerTransactions).where(eq(ledgerTransactions.ownerId, ownerId));
   } else {
-    initializeMemoryStore(ownerId);
     allContracts = Array.from(memoryContracts.values()).filter(c => c.ownerId === ownerId);
     allSchedules = Array.from(memorySchedules.values()).filter(s => s.ownerId === ownerId);
     allTransactions = Array.from(memoryTransactions.values()).filter(t => t.ownerId === ownerId);
@@ -1097,7 +937,6 @@ export async function exportAllData(ownerId: number) {
     allSchedules = await db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.ownerId, ownerId));
     allTransactions = await db.select().from(ledgerTransactions).where(eq(ledgerTransactions.ownerId, ownerId));
   } else {
-    initializeMemoryStore(ownerId);
     allContracts = Array.from(memoryContracts.values()).filter(c => c.ownerId === ownerId);
     allSchedules = Array.from(memorySchedules.values()).filter(s => s.ownerId === ownerId);
     allTransactions = Array.from(memoryTransactions.values()).filter(t => t.ownerId === ownerId);

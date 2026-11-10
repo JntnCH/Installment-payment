@@ -784,10 +784,10 @@ export default function IndividualLedger({
                                   : "border-[#1C1917]/10 hover:border-[#1C1917]/25 shadow-xs"
                               }`}
                             >
-                              <div className="flex items-center justify-between gap-3">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <h3 className="font-semibold text-base text-[#1C1917] truncate">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h3 className="font-semibold text-base text-[#1C1917] break-words sm:truncate">
                                       {c.title}
                                     </h3>
                                     <StatusChip status={c.status} />
@@ -797,7 +797,7 @@ export default function IndividualLedger({
                                   </p>
                                 </div>
 
-                                <div className="flex items-center gap-4 shrink-0">
+                                <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:shrink-0 sm:justify-end">
                                   <div className="text-right">
                                     <div className="text-[11px] text-[#78716C]">ยอดเงินต้น</div>
                                     <Money amount={c.principal} size="lg" />
@@ -924,7 +924,7 @@ export default function IndividualLedger({
 
                       {/* Schedules List with Pay & Edit Action Buttons */}
                       <div className="space-y-3 pt-2">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                           <span className="text-xs font-semibold text-[#1C1917]">
                             รายการงวดชำระและประวัติ ({contractTransactions.length} รายการ)
                           </span>
@@ -940,7 +940,7 @@ export default function IndividualLedger({
                             return (
                               <div
                                 key={tx.transactionId}
-                                className="p-4 bg-white rounded-[16px] border border-[#1C1917]/10 shadow-xs flex items-center justify-between gap-3 hover:border-[#1C1917]/25 transition-all"
+                                className="p-4 bg-white rounded-[16px] border border-[#1C1917]/10 shadow-xs flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between hover:border-[#1C1917]/25 transition-all"
                               >
                                 <div className="flex items-center gap-3 min-w-0 flex-1">
                                   <StatusDot
@@ -962,7 +962,7 @@ export default function IndividualLedger({
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 sm:gap-3 shrink-0 text-right">
+                                <div className="flex w-full flex-col gap-2 text-left sm:w-auto sm:flex-row sm:items-center sm:gap-3 sm:shrink-0 sm:text-right">
                                   <Money
                                     amount={tx.amount}
                                     size="base"
@@ -975,7 +975,7 @@ export default function IndividualLedger({
                                       size="sm"
                                       variant="secondary"
                                       onClick={() => handleOpenEditSchedule(tx)}
-                                      className="text-xs h-8 px-2.5"
+                                      className="text-xs h-8 px-2.5 w-full sm:w-auto"
                                       icon={<Edit2 className="w-3 h-3 text-[#D97706]" />}
                                     >
                                       แก้งวด
@@ -996,7 +996,7 @@ export default function IndividualLedger({
                                           contractTitle: selectedContract.title,
                                         });
                                       }}
-                                      className="text-xs h-8 px-3"
+                                      className="text-xs h-8 px-3 w-full sm:w-auto"
                                     >
                                       {isDebtor ? "📥 รับชำระ (รับเข้า)" : "💸 จ่ายเงินกู้ (จ่ายออก)"}
                                     </Button>
@@ -1039,7 +1039,7 @@ export default function IndividualLedger({
                 <input
                   type="text"
                   required
-                  placeholder="เช่น สมชาย วัฒนากูล"
+                  placeholder="ระบุชื่อคู่สัญญา"
                   value={partyForm.displayName}
                   onChange={(e) =>
                     setPartyForm({ ...partyForm, displayName: e.target.value })
