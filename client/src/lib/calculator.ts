@@ -55,10 +55,20 @@ export function addDays(startDateStr: string, daysToAdd: number, skipSundays = f
   return `${y}-${m}-${d}`;
 }
 
-/** Add N months to date string (YYYY-MM-DD) */
+/** Add N months to date string (YYYY-MM-DD), clamping to the last valid day of the target month. */
 export function addMonths(startDateStr: string, monthsToAdd: number): string {
   const [year, month, day] = startDateStr.split("-").map(Number);
-  const date = new Date(year, month - 1 + monthsToAdd, day);
+  const targetMonth = new Date(year, month - 1 + monthsToAdd, 1);
+  const lastDayOfTargetMonth = new Date(
+    targetMonth.getFullYear(),
+    targetMonth.getMonth() + 1,
+    0
+  ).getDate();
+  const date = new Date(
+    targetMonth.getFullYear(),
+    targetMonth.getMonth(),
+    Math.min(day, lastDayOfTargetMonth)
+  );
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
