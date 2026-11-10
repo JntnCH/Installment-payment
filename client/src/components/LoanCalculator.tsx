@@ -602,9 +602,9 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-[#78716C]">ดอกเบี้ยต่อวัน</div>
+                    <div className="text-[10px] text-[#78716C]">ดอกเบี้ยต่อ{myRole === "debtor" && debtorFrequency === "monthly" ? "เดือน" : "วัน"}</div>
                     <div className="font-bold font-mono text-[#1C1917]">
-                      {dailyResult.dailyRate.toFixed(2)}% / วัน
+                      {dailyResult.dailyRate.toFixed(2)}% / {myRole === "debtor" && debtorFrequency === "monthly" ? "เดือน" : "วัน"}
                     </div>
                   </div>
                 </div>
