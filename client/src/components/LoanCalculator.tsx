@@ -37,6 +37,7 @@ interface LoanCalculatorProps {
 export default function LoanCalculator({ onContractCreated }: LoanCalculatorProps) {
   const [loanType, setLoanType] = useState<LoanType>("daily_informal");
   const [myRole, setMyRole] = useState<"debtor" | "creditor">("debtor"); // default: ฉันเป็นลูกหนี้
+  const [debtorFrequency, setDebtorFrequency] = useState<"daily" | "monthly">("daily");
   const [partyType, setPartyType] = useState<"existing" | "new">("existing");
   const [selectedPartyId, setSelectedPartyId] = useState<string>("");
   const [newPartyName, setNewPartyName] = useState("");
@@ -97,6 +98,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
         firstDeductAmount: dailyFirstDeduct,
         startDate: dailyStartDate,
         skipSundays: dailySkipSunday,
+        frequency: myRole === "debtor" ? debtorFrequency : "daily",
       });
     } else if (dailyInputMode === "by_actual_received") {
       return calculateDailyLoan({
@@ -108,6 +110,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
         actualReceivedAmount: dailyActualReceived,
         startDate: dailyStartDate,
         skipSundays: dailySkipSunday,
+        frequency: myRole === "debtor" ? debtorFrequency : "daily",
       });
     } else {
       return calculateDailyLoan({
@@ -118,6 +121,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
         firstDeductAmount: dailyFirstDeduct,
         startDate: dailyStartDate,
         skipSundays: dailySkipSunday,
+        frequency: myRole === "debtor" ? debtorFrequency : "daily",
       });
     }
   }, [
@@ -131,6 +135,8 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
     dailyActualReceived,
     dailyStartDate,
     dailySkipSunday,
+    myRole,
+    debtorFrequency,
   ]);
 
   const floatingResult = useMemo(
@@ -138,12 +144,12 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
       calculateFloatingLoan({
         principal: floatingPrincipal,
         interestRatePerCycle: floatingRate,
-        cycleType: floatingCycle,
+        cycleType: myRole === "debtor" ? debtorFrequency : floatingCycle,
         cycleCount: floatingEstCycles,
         feeAmount: 0,
         startDate: floatingStartDate,
       }),
-    [floatingPrincipal, floatingRate, floatingCycle, floatingEstCycles, floatingStartDate]
+    [floatingPrincipal, floatingRate, floatingCycle, floatingEstCycles, floatingStartDate, myRole, debtorFrequency]
   );
 
   const flatResult = useMemo(
@@ -153,9 +159,10 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
         downPayment: flatDownPayment,
         ratePercent: flatRatePerYear,
         installmentCount: flatMonths,
+        frequency: myRole === "debtor" ? debtorFrequency : "monthly",
         startDate: flatStartDate,
       }),
-    [flatItemPrice, flatDownPayment, flatRatePerYear, flatMonths, flatStartDate]
+    [flatItemPrice, flatDownPayment, flatRatePerYear, flatMonths, flatStartDate, myRole, debtorFrequency]
   );
 
   const amortResult = useMemo(
@@ -164,9 +171,10 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
         principal: amortPrincipal,
         annualRate: amortAnnualRate,
         months: amortMonths,
+        frequency: myRole === "debtor" ? debtorFrequency : "monthly",
         startDate: amortStartDate,
       }),
-    [amortPrincipal, amortAnnualRate, amortMonths, amortStartDate]
+    [amortPrincipal, amortAnnualRate, amortMonths, amortStartDate, myRole, debtorFrequency]
   );
 
   // Active calculation details
@@ -177,7 +185,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
         return {
           title:
             contractTitle ||
-            `${myRole === "debtor" ? "กู้ยืมรายวัน" : "ให้ยืมรายวัน"} ${dailyDays} วัน จ่ายวันละ ฿${dailyResult.dailyInstallment.toLocaleString()} ${netText}`,
+            `${myRole === "debtor" ? "กู้ยืม" : "ให้ยืม"} ${dailyDays} ${myRole === "debtor" && debtorFrequency === "monthly" ? "เดือน" : "วัน"} จ่าย${myRole === "debtor" && debtorFrequency === "monthly" ? "เดือนละ" : "วันละ"} ฿${dailyResult.dailyInstallment.toLocaleString()} ${netText}`,
           principal: dailyPrincipal,
           interestRate: Number(dailyResult.ratePercent.toFixed(2)),
           installmentCount: dailyResult.schedules.length,
@@ -359,7 +367,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
       {/* 2. Loan Type Selector Tabs */}
       <div className="flex items-center gap-1.5 p-1 bg-[#FFFCF8] rounded-full border border-[#1C1917]/10 overflow-x-auto scrollbar-thin">
         {[
-          { id: "daily_informal" as LoanType, label: "เงินกู้รายวันนอกระบบ (จ่ายรายวัน)" },
+          { id: "daily_informal" as LoanType, label: "เงินกู้นอกระบบ (รายวัน/รายเดือน)" },
           { id: "floating_interest" as LoanType, label: "เงินกู้ดอกลอย (ส่งเฉพาะดอก)" },
           { id: "flat_installment" as LoanType, label: "ผ่อนสินค้าดอกคงที่" },
           { id: "effective_amortization" as LoanType, label: "ลดต้นลดดอก" },
@@ -380,6 +388,15 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
       </div>
 
       {/* 3. Main Calculator Workspace */}
+      {myRole === "debtor" && (
+        <div className="flex items-center gap-3 rounded-xl border border-[#1C1917]/10 bg-[#FFFCF8] p-3">
+          <span className="text-xs font-semibold text-[#1C1917]">รูปแบบการชำระ</span>
+          <div className="grid grid-cols-2 gap-2 flex-1">
+            <button type="button" onClick={() => setDebtorFrequency("daily")} className={`h-9 rounded-lg border text-xs font-medium ${debtorFrequency === "daily" ? "bg-[#1C1917] text-white border-[#1C1917]" : "bg-white text-[#1C1917] border-[#1C1917]/15"}`}>รายวัน</button>
+            <button type="button" onClick={() => setDebtorFrequency("monthly")} className={`h-9 rounded-lg border text-xs font-medium ${debtorFrequency === "monthly" ? "bg-[#1C1917] text-white border-[#1C1917]" : "bg-white text-[#1C1917] border-[#1C1917]/15"}`}>รายเดือน</button>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Form: Parameters */}
         <div className="lg:col-span-6 bg-[#FFFCF8] rounded-[20px] border border-[#1C1917]/10 p-6 space-y-5">
@@ -443,7 +460,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                 {dailyInputMode === "by_payment" ? (
                   <div>
                     <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                      ต้องจ่ายวันละ (บาท/วัน) *
+                      ต้องจ่าย{myRole === "debtor" && debtorFrequency === "monthly" ? "เดือนละ (บาท/เดือน)" : "วันละ (บาท/วัน)"} *
                     </label>
                     <input
                       type="number"
@@ -474,7 +491,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                    ระยะเวลา (วัน) *
+                    ระยะเวลา ({myRole === "debtor" && debtorFrequency === "monthly" ? "เดือน" : "วัน"}) *
                   </label>
                   <input
                     type="number"
@@ -585,9 +602,9 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-[#78716C]">ดอกเบี้ยต่อวัน</div>
+                    <div className="text-[10px] text-[#78716C]">ดอกเบี้ยต่อ{myRole === "debtor" && debtorFrequency === "monthly" ? "เดือน" : "วัน"}</div>
                     <div className="font-bold font-mono text-[#1C1917]">
-                      {dailyResult.dailyRate.toFixed(2)}% / วัน
+                      {dailyResult.dailyRate.toFixed(2)}% / {myRole === "debtor" && debtorFrequency === "monthly" ? "เดือน" : "วัน"}
                     </div>
                   </div>
                 </div>
@@ -605,17 +622,19 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                     className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917]"
                   />
                 </div>
-                <div className="flex items-end pb-2">
-                  <label className="flex items-center gap-2 text-xs text-[#1C1917] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={dailySkipSunday}
-                      onChange={(e) => setDailySkipSunday(e.target.checked)}
-                      className="rounded border-[#1C1917]/20 text-[#1C1917]"
-                    />
-                    <span>เว้นวันอาทิตย์</span>
-                  </label>
-                </div>
+                {myRole !== "debtor" || debtorFrequency === "daily" ? (
+                  <div className="flex items-end pb-2">
+                    <label className="flex items-center gap-2 text-xs text-[#1C1917] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={dailySkipSunday}
+                        onChange={(e) => setDailySkipSunday(e.target.checked)}
+                        className="rounded border-[#1C1917]/20 text-[#1C1917]"
+                      />
+                      <span>เว้นวันอาทิตย์</span>
+                    </label>
+                  </div>
+                ) : null}
               </div>
             </div>
           )}
@@ -655,16 +674,22 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                   <label className="block text-xs font-medium text-[#1C1917] mb-1">
                     รอบการส่งดอก
                   </label>
-                  <select
-                    value={floatingCycle}
-                    onChange={(e: any) => setFloatingCycle(e.target.value)}
-                    className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917]"
-                  >
-                    <option value="monthly">รายเดือน (ทุก 1 เดือน)</option>
-                    <option value="biweekly">ราย 15 วัน</option>
-                    <option value="weekly">รายสัปดาห์ (ทุก 7 วัน)</option>
-                    <option value="daily">รายวัน</option>
-                  </select>
+                  {myRole === "debtor" ? (
+                    <div className="h-10 flex items-center px-3 bg-[#F6F4F0] border border-[#1C1917]/10 rounded-[10px] text-sm text-[#1C1917]">
+                      {debtorFrequency === "daily" ? "รายวัน" : "รายเดือน"}
+                    </div>
+                  ) : (
+                    <select
+                      value={floatingCycle}
+                      onChange={(e: any) => setFloatingCycle(e.target.value)}
+                      className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917]"
+                    >
+                      <option value="monthly">รายเดือน (ทุก 1 เดือน)</option>
+                      <option value="biweekly">ราย 15 วัน</option>
+                      <option value="weekly">รายสัปดาห์ (ทุก 7 วัน)</option>
+                      <option value="daily">รายวัน</option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-[#1C1917] mb-1">
@@ -739,7 +764,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                    ระยะเวลาผ่อน (เดือน)
+                    ระยะเวลาผ่อน ({myRole === "debtor" && debtorFrequency === "daily" ? "วัน" : "เดือน"})
                   </label>
                   <input
                     type="number"
@@ -798,7 +823,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                    ระยะเวลาผ่อน (เดือน)
+                    ระยะเวลาผ่อน ({myRole === "debtor" && debtorFrequency === "daily" ? "วัน" : "เดือน"})
                   </label>
                   <input
                     type="number"
@@ -953,9 +978,9 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <div className="text-xs text-[#78716C]">ค่างวดส่งรายวัน</div>
+                    <div className="text-xs text-[#78716C]">ค่างวดส่ง{myRole === "debtor" && debtorFrequency === "monthly" ? "รายเดือน" : "รายวัน"}</div>
                     <Money amount={dailyResult.dailyInstallment} size="xl" />
-                    <div className="text-[11px] text-[#78716C]">ระยะเวลา {dailyDays} วัน</div>
+                    <div className="text-[11px] text-[#78716C]">ระยะเวลา {dailyDays} {myRole === "debtor" && debtorFrequency === "monthly" ? "เดือน" : "วัน"}</div>
                   </div>
                   <div>
                     <div className="text-xs text-[#78716C]">
@@ -1029,7 +1054,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
             {loanType === "flat_installment" && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-xs text-[#78716C]">ค่างวดต่อเดือน</div>
+                  <div className="text-xs text-[#78716C]">ค่างวดต่อ{myRole === "debtor" && debtorFrequency === "daily" ? "วัน" : "เดือน"}</div>
                   <Money amount={flatResult.perInstallment} size="xl" />
                 </div>
                 <div>
@@ -1050,7 +1075,7 @@ export default function LoanCalculator({ onContractCreated }: LoanCalculatorProp
             {loanType === "effective_amortization" && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-xs text-[#78716C]">ค่างวดต่อเดือน</div>
+                  <div className="text-xs text-[#78716C]">ค่างวดต่อ{myRole === "debtor" && debtorFrequency === "daily" ? "วัน" : "เดือน"}</div>
                   <Money amount={amortResult.monthlyPayment} size="xl" />
                 </div>
                 <div>
