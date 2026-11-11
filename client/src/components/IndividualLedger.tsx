@@ -176,6 +176,8 @@ export default function IndividualLedger({
   const selectedContractLedger = contractQuery.data;
   const selectedContract = selectedContractLedger?.contract;
   const contractTransactions = selectedContractLedger?.transactions || [];
+  // Show only the original installment schedule; payment ledger entries remain stored separately.
+  const scheduleTransactions = contractTransactions.filter((tx) => tx.type === "scheduled");
 
   // Filter parties based on search query
   const filteredParties = useMemo(() => {
@@ -926,7 +928,7 @@ export default function IndividualLedger({
                       <div className="space-y-3 pt-2">
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                           <span className="text-xs font-semibold text-[#1C1917]">
-                            รายการงวดชำระและประวัติ ({contractTransactions.length} รายการ)
+                            รายการงวดชำระ ({scheduleTransactions.length} งวด)
                           </span>
                           <span className="text-[11px] text-[#78716C]">
                             {isDebtor ? "กดรับชำระ -> เงินเข้า" : "กดจ่ายเงิน -> จ่ายออก"}
@@ -934,7 +936,7 @@ export default function IndividualLedger({
                         </div>
 
                         <div className="space-y-2.5">
-                          {contractTransactions.map((tx) => {
+                          {scheduleTransactions.map((tx) => {
                             const isSchedule = tx.type === "scheduled";
                             const isSettled = Boolean(tx.paidAt);
                             return (
