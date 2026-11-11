@@ -217,10 +217,14 @@ export async function getContractLedger(ownerId: number, contractId: string) {
       .where(and(eq(ledgerTransactions.ownerId, ownerId), eq(ledgerTransactions.contractId, contractId)))
       .orderBy(desc(ledgerTransactions.occurredAt));
 
+    // Schedule-linked payment transactions are already represented by their
+    // schedule row (including its paid status/date). Keep only standalone
+    // transactions here to avoid showing a duplicate 31st history item.
+    const standaloneTransactions = transactionRows.filter(row => !row.scheduleId);
     return {
       party: party ? toParty(party) : null,
       contract: toContract(contract),
-      transactions: [...schedules.map(toScheduleTransaction), ...transactionRows.map(toLedgerTransaction)],
+      transactions: [...schedules.map(toScheduleTransaction), ...standaloneTransactions.map(toLedgerTransaction)],
     };
   }
   const schedules: ScheduleRow[] = [];
@@ -239,10 +243,13 @@ export async function getContractLedger(ownerId: number, contractId: string) {
   }
   transactionRows.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
 
+  // Keep schedule-linked payment transactions in the ledger for accounting,
+  // but do not render them again beside the schedule they settle.
+  const standaloneTransactions = transactionRows.filter(row => !row.scheduleId);
   return {
     party: party ? toParty(party) : null,
     contract: toContract(contract),
-    transactions: [...schedules.map(toScheduleTransaction), ...transactionRows.map(toLedgerTransaction)],
+    transactions: [...schedules.map(toScheduleTransaction), ...standaloneTransactions.map(toLedgerTransaction)],
   };
 }
 
