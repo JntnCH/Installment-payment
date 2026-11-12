@@ -975,7 +975,7 @@ export default function IndividualLedger({
                           {displayScheduleTransactions.map((tx) => {
                             const isSchedule = tx.type === "scheduled";
                             const isSettled = Boolean(tx.paidAt);
-                            const displayAmount = Number(tx.displayAmount ?? tx.amount ?? 0);
+                            const displayAmount = Number((tx as any).displayAmount ?? tx.amount ?? 0);
                             return (
                               <div
                                 key={tx.transactionId}
