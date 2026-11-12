@@ -44,6 +44,8 @@ function toParty(row: PartyRow) {
     phone: row.phone ?? "",
     note: row.note ?? "",
     status: row.status,
+    createdAt: asTimestamp(row.createdAt),
+    updatedAt: asTimestamp(row.updatedAt),
   };
 }
 

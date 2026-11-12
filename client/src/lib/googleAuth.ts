@@ -198,14 +198,16 @@ export async function exportLedgerToGoogleSheet(
 
   // 2. Parties Sheet Data
   const partiesValues = [
-    ["รหัสคู่สัญญา (Party ID)", "ชื่อ-นามสกุล / ชื่อร้าน", "สถานะบทบาท (Role)", "เบอร์โทรศัพท์", "วงเงินคงค้าง (บาท)", "หมายเหตุ"],
+    ["Party ID", "Display Name", "Role", "Phone", "Note", "Status", "Created At", "Updated At"],
     ...(ledgerData.parties || []).map((p) => [
       p.partyId || "",
       p.displayName || "",
-      p.role === "debtor" ? "ลูกหนี้ (ให้ยืม/ผ่อน)" : "เจ้าหนี้ (กู้ยืม/ค้างจ่าย)",
-      p.phone || "-",
-      p.totalBalance || 0,
+      p.role || "",
+      p.phone || "",
       p.note || "",
+      p.status || "",
+      p.createdAt || "",
+      p.updatedAt || "",
     ]),
   ];
 
