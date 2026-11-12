@@ -239,6 +239,30 @@ export default function IndividualLedger({
     };
   }, [selectedContract, contractTransactions]);
 
+  // Allocate the actual outstanding balance across unpaid installments.
+  // The final installment absorbs any rounding remainder so the sum is exact.
+  const displayScheduleTransactions = useMemo(() => {
+    if (!contractStats || scheduleTransactions.length === 0) return scheduleTransactions;
+
+    const unpaidSchedules = scheduleTransactions.filter((tx) => !tx.paidAt);
+    if (unpaidSchedules.length === 0) return scheduleTransactions;
+
+    let remainingCents = Math.max(0, Math.round(contractStats.remainingBalance * 100));
+    const baseCents = Math.floor(remainingCents / unpaidSchedules.length);
+    const allocatedAmounts = new Map<string, number>();
+
+    unpaidSchedules.forEach((tx, index) => {
+      const amountCents = index === unpaidSchedules.length - 1 ? remainingCents : baseCents;
+      allocatedAmounts.set(tx.transactionId, amountCents / 100);
+      remainingCents -= amountCents;
+    });
+
+    return scheduleTransactions.map((tx) => ({
+      ...tx,
+      displayAmount: allocatedAmounts.get(tx.transactionId) ?? Number(tx.amount || 0),
+    }));
+  }, [contractStats, scheduleTransactions]);
+
   // Handle subTab switch
   const handleSwitchSubTab = (tab: SubTab) => {
     setSubTab(tab);
@@ -948,9 +972,10 @@ export default function IndividualLedger({
                         </div>
 
                         <div className="space-y-2.5">
-                          {scheduleTransactions.map((tx) => {
+                          {displayScheduleTransactions.map((tx) => {
                             const isSchedule = tx.type === "scheduled";
                             const isSettled = Boolean(tx.paidAt);
+                            const displayAmount = Number(tx.displayAmount ?? tx.amount ?? 0);
                             return (
                               <div
                                 key={tx.transactionId}
@@ -978,7 +1003,7 @@ export default function IndividualLedger({
 
                                 <div className="flex w-full flex-col gap-2 text-left sm:w-auto sm:flex-row sm:items-center sm:gap-3 sm:shrink-0 sm:text-right">
                                   <Money
-                                    amount={tx.amount}
+                                    amount={displayAmount}
                                     size="base"
                                     sentiment={isSettled ? "income" : "default"}
                                   />
@@ -1005,8 +1030,8 @@ export default function IndividualLedger({
                                         const rawScheduleId = tx.transactionId.replace("schedule:", "");
                                         setActivePaySchedule({
                                           scheduleId: rawScheduleId,
-                                          amount: Number(tx.amount || 0),
-                                          installmentNo: 1,
+                                          amount: displayAmount,
+                                          installmentNo: Number(tx.installmentNo || 0),
                                           contractTitle: selectedContract.title,
                                         });
                                       }}
