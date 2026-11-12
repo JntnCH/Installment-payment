@@ -197,22 +197,27 @@ export default function IndividualLedger({
   const formNetActual = Math.max(0, formPrincipal - formDeduction);
   const formRate = Math.max(0, parseFloat(contractForm.interestRate) || 0);
   const formCount = Math.max(1, parseInt(contractForm.installmentCount, 10) || 1);
-  const formTotalInterest = (formPrincipal * formRate) / 100;
-  const formTotalRepay = formPrincipal + formTotalInterest;
-  const formPerInstallment = Math.ceil(formTotalRepay / formCount);
+  const formTotalInterest = Math.round(((formPrincipal * formRate) / 100) * 100) / 100;
+  const formTotalRepay = Math.round((formPrincipal + formTotalInterest) * 100) / 100;
+  const formPerInstallment = Math.round((formTotalRepay / formCount) * 100) / 100;
 
   // Contract Financial Stats Breakdown (วงกลมตรงกลาง และการคำนวณยอดคงเหลือ)
   const contractStats = useMemo(() => {
     if (!selectedContract) return null;
 
-    const principal = Number(selectedContract.principal || 0);
+    const principal = Math.max(0, Number(selectedContract.principal || 0));
     const schedules = contractTransactions.filter((t) => t.type === "scheduled");
-    const totalRepayable = schedules.reduce((sum, s) => sum + Number(s.amount || 0), 0) || principal;
-    const totalPaid = schedules.filter((s) => Boolean(s.paidAt)).reduce((sum, s) => sum + Number(s.amount || 0), 0);
-    const remainingBalance = Math.max(0, totalRepayable - totalPaid);
-    const interestAmount = Math.max(0, totalRepayable - principal);
-    const paidCount = schedules.filter((s) => Boolean(s.paidAt)).length;
-    const totalCount = schedules.length || selectedContract.installmentCount || 1;
+    const interestRate = Math.max(0, Number(selectedContract.interestRate || 0));
+    const interestAmount = Math.round(((principal * interestRate) / 100) * 100) / 100;
+    const totalRepayable = Math.round((principal + interestAmount) * 100) / 100;
+    const totalPaid = Math.round(schedules.reduce((sum, schedule) => {
+      const paidAmount = Number(schedule.paidAmount || 0);
+      // Older records may have paidAt but no persisted paidAmount.
+      return sum + (paidAmount > 0 ? paidAmount : schedule.paidAt ? Number(schedule.amount || 0) : 0);
+    }, 0) * 100) / 100;
+    const remainingBalance = Math.max(0, Math.round((totalRepayable - totalPaid) * 100) / 100);
+    const paidCount = schedules.filter((schedule) => Boolean(schedule.paidAt)).length;
+    const totalCount = Number(selectedContract.installmentCount || schedules.length || 1);
     const progressPercent = totalRepayable > 0 ? Math.min(100, Math.round((totalPaid / totalRepayable) * 100)) : 0;
 
     return {
