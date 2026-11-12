@@ -579,22 +579,84 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
       .where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.id, input.scheduleId)))
       .limit(1);
     if (!schedule) throw new Error("ไม่พบงวดชำระที่เลือก");
+    if (schedule.status !== "pending") throw new Error("งวดนี้ถูกปิดยอดแล้ว");
 
-    await db
-      .update(contractPaymentSchedules)
-      .set({ status: "paid", paidAmount: input.paidAmount.toFixed(2), paidAt })
-      .where(eq(contractPaymentSchedules.id, input.scheduleId));
+    const contractSchedules = await db
+      .select()
+      .from(contractPaymentSchedules)
+      .where(and(
+        eq(contractPaymentSchedules.ownerId, ownerId),
+        eq(contractPaymentSchedules.contractId, schedule.contractId)
+      ))
+      .orderBy(asc(contractPaymentSchedules.installmentNo));
 
-    await createLedgerTransaction(ownerId, {
-      partyId: schedule.partyId,
-      contractId: schedule.contractId,
-      scheduleId: schedule.id,
-      type: "payment",
-      amount: input.paidAmount,
-      occurredAt: paidAt,
-      source: input.source,
-      note: input.note || `ชำระงวดที่ ${schedule.installmentNo}`,
+    const pendingSchedules = contractSchedules.filter(row => row.status === "pending");
+    if (!pendingSchedules.length) throw new Error("ไม่พบงวดที่ยังมียอดค้างชำระ");
+
+    const outstandingCents = contractSchedules.reduce((sum, row) => {
+      if (row.status === "waived") return sum;
+      const amountCents = Math.max(0, Math.round(asAmount(row.amount) * 100));
+      const paidCents = Math.max(0, Math.round(asAmount(row.paidAmount) * 100));
+      const actualPaidCents = paidCents > 0 ? paidCents : row.paidAt ? amountCents : 0;
+      return sum + Math.max(0, amountCents - actualPaidCents);
+    }, 0);
+
+    let remainingCents = outstandingCents;
+    const baseCents = Math.floor(outstandingCents / pendingSchedules.length);
+    const allocations = pendingSchedules.map((row, index) => {
+      const allocationCents = index === pendingSchedules.length - 1 ? remainingCents : baseCents;
+      remainingCents -= allocationCents;
+      return {
+        row,
+        allocationCents,
+        previousPaidCents: Math.max(0, Math.round(asAmount(row.paidAmount) * 100)),
+      };
     });
+
+    const selectedAllocation = allocations.find(item => item.row.id === schedule.id);
+    if (!selectedAllocation) throw new Error("ไม่พบงวดที่เลือกในรายการค้างชำระ");
+
+    const paymentCents = Math.max(0, Math.round(input.paidAmount * 100));
+    if (paymentCents > selectedAllocation.allocationCents) {
+      throw new Error("ยอดชำระสูงกว่ายอดคงเหลือของงวด กรุณาตรวจสอบยอดอีกครั้ง");
+    }
+
+    const selectedTotalCents = selectedAllocation.previousPaidCents + selectedAllocation.allocationCents;
+    const newPaidCents = selectedAllocation.previousPaidCents + paymentCents;
+    const isFullyPaid = newPaidCents >= selectedTotalCents;
+
+    await db.transaction(async tx => {
+      for (const item of allocations) {
+        const revisedAmount = (item.previousPaidCents + item.allocationCents) / 100;
+        await tx
+          .update(contractPaymentSchedules)
+          .set({ amount: revisedAmount.toFixed(2) })
+          .where(eq(contractPaymentSchedules.id, item.row.id));
+      }
+
+      await tx
+        .update(contractPaymentSchedules)
+        .set({
+          status: isFullyPaid ? "paid" : "pending",
+          paidAmount: (newPaidCents / 100).toFixed(2),
+          paidAt: isFullyPaid ? paidAt : null,
+        })
+        .where(eq(contractPaymentSchedules.id, schedule.id));
+
+      await tx.insert(ledgerTransactions).values({
+        id: crypto.randomUUID(),
+        ownerId,
+        partyId: schedule.partyId,
+        contractId: schedule.contractId,
+        scheduleId: schedule.id,
+        type: "payment",
+        amount: input.paidAmount.toFixed(2),
+        occurredAt: paidAt,
+        source: input.source,
+        note: input.note || `ชำระงวดที่ ${schedule.installmentNo}`,
+      });
+    });
+
     const [updated] = await db
       .select()
       .from(contractPaymentSchedules)
