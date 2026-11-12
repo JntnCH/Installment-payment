@@ -155,7 +155,7 @@ export async function getPartyLedger(ownerId: number, partyId: string) {
           .select()
           .from(contractPaymentSchedules)
           .where(and(eq(contractPaymentSchedules.ownerId, ownerId), inArray(contractPaymentSchedules.contractId, contractIds)))
-          .orderBy(asc(contractPaymentSchedules.dueDate))
+          .orderBy(asc(contractPaymentSchedules.installmentNo))
       : [];
     const transactionRows = await db
       .select()
@@ -184,7 +184,7 @@ export async function getPartyLedger(ownerId: number, partyId: string) {
       scheduleRows.push(s);
     }
   }
-  scheduleRows.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  scheduleRows.sort((a, b) => a.installmentNo - b.installmentNo);
 
   const transactionRows: TransactionRow[] = [];
   for (const t of Array.from(memoryTransactions.values())) {
@@ -212,7 +212,7 @@ export async function getContractLedger(ownerId: number, contractId: string) {
       .select()
       .from(contractPaymentSchedules)
       .where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.contractId, contractId)))
-      .orderBy(asc(contractPaymentSchedules.dueDate));
+      .orderBy(asc(contractPaymentSchedules.installmentNo));
     const transactionRows = await db
       .select()
       .from(ledgerTransactions)
@@ -231,7 +231,7 @@ export async function getContractLedger(ownerId: number, contractId: string) {
       schedules.push(s);
     }
   }
-  schedules.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  schedules.sort((a, b) => a.installmentNo - b.installmentNo);
 
   const transactionRows: TransactionRow[] = [];
   for (const t of Array.from(memoryTransactions.values())) {

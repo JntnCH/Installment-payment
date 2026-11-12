@@ -177,7 +177,9 @@ export default function IndividualLedger({
   const selectedContract = selectedContractLedger?.contract;
   const contractTransactions = selectedContractLedger?.transactions || [];
   // Show only the original installment schedule; payment ledger entries remain stored separately.
-  const scheduleTransactions = contractTransactions.filter((tx) => tx.type === "scheduled");
+  const scheduleTransactions = contractTransactions
+    .filter((tx) => tx.type === "scheduled")
+    .sort((a, b) => Number(a.installmentNo || 0) - Number(b.installmentNo || 0));
 
   // Filter parties based on search query
   const filteredParties = useMemo(() => {
@@ -207,15 +209,20 @@ export default function IndividualLedger({
 
     const principal = Math.max(0, Number(selectedContract.principal || 0));
     const schedules = contractTransactions.filter((t) => t.type === "scheduled");
-    const interestRate = Math.max(0, Number(selectedContract.interestRate || 0));
-    const interestAmount = Math.round(((principal * interestRate) / 100) * 100) / 100;
-    const totalRepayable = Math.round((principal + interestAmount) * 100) / 100;
+    // The persisted installment schedule is the source of truth for total contract amount.
+    const totalRepayable = Math.round(schedules.reduce((sum, schedule) => sum + Number(schedule.amount || 0), 0) * 100) / 100;
+    const interestAmount = Math.max(0, Math.round((totalRepayable - principal) * 100) / 100);
     const totalPaid = Math.round(schedules.reduce((sum, schedule) => {
       const paidAmount = Number(schedule.paidAmount || 0);
-      // Older records may have paidAt but no persisted paidAmount.
+      // Legacy fully-paid rows may not have a persisted paidAmount.
       return sum + (paidAmount > 0 ? paidAmount : schedule.paidAt ? Number(schedule.amount || 0) : 0);
     }, 0) * 100) / 100;
-    const remainingBalance = Math.max(0, Math.round((totalRepayable - totalPaid) * 100) / 100);
+    const remainingBalance = Math.max(0, Math.round(schedules.reduce((sum, schedule) => {
+      const amount = Number(schedule.amount || 0);
+      const paidAmount = Number(schedule.paidAmount || 0);
+      const actualPaid = paidAmount > 0 ? paidAmount : schedule.paidAt ? amount : 0;
+      return sum + Math.max(0, amount - actualPaid);
+    }, 0) * 100) / 100);
     const paidCount = schedules.filter((schedule) => Boolean(schedule.paidAt)).length;
     const totalCount = Number(selectedContract.installmentCount || schedules.length || 1);
     const progressPercent = totalRepayable > 0 ? Math.min(100, Math.round((totalPaid / totalRepayable) * 100)) : 0;
