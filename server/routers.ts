@@ -169,11 +169,17 @@ export const appRouter = router({
       const data = await exportAllData(ctx.user.id);
       return stripDemoExport(data);
     }),
+    // Arbitrary user-supplied webhook URLs can exfiltrate private ledger data.
+    // Keep the route typed for the current UI, but block it until per-user OAuth
+    // and explicit spreadsheet ownership are implemented.
     syncGoogleSheets: protectedProcedure
       .input(webhookSyncInputSchema)
-      .mutation(({ ctx, input }) =>
-        syncToGoogleSheetsWebhook(ctx.user.id, input.webhookUrl, input.syncTarget),
-      ),
+      .mutation(() => {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "ปิดการซิงค์ผ่าน Webhook ชั่วคราว เพื่อป้องกันข้อมูลบัญชีรั่วไหล",
+        });
+      }),
     callDialogflowService: publicProcedure
       .input(dialogflowServiceSchema)
       .mutation(async ({ input }) => callDialogflowServiceEndpoint(input)),
