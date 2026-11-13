@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { authIdentities, InsertUser, users, type AuthIdentity } from "../drizzle/schema";
+import { createHash } from "node:crypto";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +90,127 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+export type AuthProvider = AuthIdentity["provider"];
+
+function providerOpenId(provider: AuthProvider, providerUserId: string): string {
+  const prefix = provider === "google" ? "g_" : "l_";
+  const digest = createHash("sha256").update(providerUserId).digest("hex");
+  return prefix + digest.slice(0, 62);
+}
+
+export async function getUserByAuthIdentity(provider: AuthProvider, providerUserId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+
+  const rows = await db
+    .select({ user: users })
+    .from(authIdentities)
+    .innerJoin(users, eq(authIdentities.userId, users.id))
+    .where(and(
+      eq(authIdentities.provider, provider),
+      eq(authIdentities.providerUserId, providerUserId),
+    ))
+    .limit(1);
+
+  return rows[0]?.user;
+}
+
+/** Create a distinct account on first provider login; never merge by email. */
+export async function createUserForAuthIdentity(input: {
+  provider: AuthProvider;
+  providerUserId: string;
+  name?: string | null;
+  email?: string | null;
+}) {
+  if (!input.providerUserId) throw new Error("Provider user ID is required");
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+
+  return db.transaction(async tx => {
+    const existing = await tx
+      .select({ user: users })
+      .from(authIdentities)
+      .innerJoin(users, eq(authIdentities.userId, users.id))
+      .where(and(
+        eq(authIdentities.provider, input.provider),
+        eq(authIdentities.providerUserId, input.providerUserId),
+      ))
+      .limit(1);
+    if (existing[0]) return existing[0].user;
+
+    const openId = providerOpenId(input.provider, input.providerUserId);
+    await tx.insert(users).values({
+      openId,
+      name: input.name ?? null,
+      email: input.email ?? null,
+      loginMethod: input.provider,
+      lastSignedIn: new Date(),
+    });
+
+    const createdRows = await tx.select().from(users).where(eq(users.openId, openId)).limit(1);
+    const user = createdRows[0];
+    if (!user) throw new Error("Failed to create user account");
+
+    await tx.insert(authIdentities).values({
+      userId: user.id,
+      provider: input.provider,
+      providerUserId: input.providerUserId,
+      email: input.email ?? null,
+      displayName: input.name ?? null,
+    });
+    return user;
+  });
+}
+
+/** Link a provider to an already authenticated account; email is not used to merge accounts. */
+export async function linkAuthIdentity(input: {
+  userId: number;
+  provider: AuthProvider;
+  providerUserId: string;
+  name?: string | null;
+  email?: string | null;
+}) {
+  if (!input.providerUserId) throw new Error("Provider user ID is required");
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+
+  return db.transaction(async tx => {
+    const owner = await tx.select({ id: users.id }).from(users)
+      .where(eq(users.id, input.userId)).limit(1);
+    if (!owner[0]) throw new Error("User account not found");
+
+    const identity = await tx.select().from(authIdentities).where(and(
+      eq(authIdentities.provider, input.provider),
+      eq(authIdentities.providerUserId, input.providerUserId),
+    )).limit(1);
+
+    if (identity[0]) {
+      if (identity[0].userId !== input.userId) {
+        throw new Error("This provider account is already linked to another user");
+      }
+      return identity[0];
+    }
+
+    const sameProvider = await tx.select().from(authIdentities).where(and(
+      eq(authIdentities.userId, input.userId),
+      eq(authIdentities.provider, input.provider),
+    )).limit(1);
+    if (sameProvider[0]) throw new Error("This user already has an identity for this provider");
+
+    await tx.insert(authIdentities).values({
+      userId: input.userId,
+      provider: input.provider,
+      providerUserId: input.providerUserId,
+      email: input.email ?? null,
+      displayName: input.name ?? null,
+    });
+
+    const linked = await tx.select().from(authIdentities).where(and(
+      eq(authIdentities.provider, input.provider),
+      eq(authIdentities.providerUserId, input.providerUserId),
+    )).limit(1);
+    if (!linked[0]) throw new Error("Failed to link provider identity");
+    return linked[0];
+  });
+}
+
