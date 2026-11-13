@@ -59,7 +59,9 @@ function stripDemoExport(data: Awaited<ReturnType<typeof exportAllData>>) {
   };
 }
 
-function emptyStats() {
+type DashboardStats = Awaited<ReturnType<typeof getDashboardStats>>;
+
+function emptyStats(): DashboardStats {
   return {
     debtorCount: 0,
     creditorCount: 0,
@@ -84,7 +86,9 @@ function emptyStats() {
     overdue: { count: 0, amount: 0 },
     today: { count: 0, amount: 0 },
     soon: { count: 0, amount: 0 },
-    alerts: [] as unknown[],
+    alerts: [],
+    monthlyTimeline: [],
+    recentTransactions: [],
   };
 }
 
