@@ -214,3 +214,14 @@ export async function linkAuthIdentity(input: {
   });
 }
 
+
+export async function listAuthIdentities(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  return db.select({
+    provider: authIdentities.provider,
+    email: authIdentities.email,
+    displayName: authIdentities.displayName,
+    createdAt: authIdentities.createdAt,
+  }).from(authIdentities).where(eq(authIdentities.userId, userId));
+}
