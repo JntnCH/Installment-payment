@@ -199,25 +199,9 @@ export const appRouter = router({
       .mutation(({ ctx, input }) => createLedgerContract(ctx.user.id, input)),
     createTransaction: protectedProcedure
       .input(transactionInputSchema)
-      .mutation(async ({ ctx, input }) => {
-        const created = await createLedgerTransaction(ctx.user.id, input);
-        if (sheetsProxyConfigured() && Number(input.amount) > 0) {
-          try {
-            await createSheetsTransaction({
-              type: input.type === "disbursement" ? "รายจ่าย" : "รายรับ",
-              item: input.note || input.type || "รายการผ่อนชำระ",
-              amount: Number(input.amount),
-              account: input.source || "ระบบผ่อนชำระ",
-              recorderName: String(ctx.user.name || ctx.user.id),
-              channel: "Installment Ledger",
-              note: input.note || "",
-            });
-          } catch (err) {
-            console.warn("[sheets dual-write]", err instanceof Error ? err.message : err);
-          }
-        }
-        return created;
-      }),
+      .mutation(({ ctx, input }) =>
+        createLedgerTransaction(ctx.user.id, input),
+      ),
     markSchedulePaid: protectedProcedure
       .input(schedulePaymentInputSchema)
       .mutation(({ ctx, input }) => markSchedulePaid(ctx.user.id, input)),
