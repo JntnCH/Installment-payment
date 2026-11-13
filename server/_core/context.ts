@@ -16,18 +16,11 @@ export async function createContext(
   try {
     user = await sdk.authenticateRequest(opts.req);
   } catch (error) {
-    // Provide a default local session in dev/preview if no active OAuth session is present
-    user = {
-      id: 1,
-      openId: "preview-admin",
-      name: "ผู้ดูแลระบบ",
-      email: "admin@installment.local",
-      loginMethod: "local",
-      role: "admin",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      lastSignedIn: new Date(),
-    };
+    // Never create a shared fallback identity: unauthenticated requests must
+    // remain anonymous so protected procedures cannot expose another user's data.
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[Auth] Request has no valid session:", String(error));
+    }
   }
 
   return {
