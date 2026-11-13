@@ -42,6 +42,7 @@ import {
   sheetsProxyConfigured,
 } from "./sheetsProxy";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { listAuthIdentities } from "./db";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
@@ -96,6 +97,7 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    identities: protectedProcedure.query(({ ctx }) => listAuthIdentities(ctx.user.id)),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
