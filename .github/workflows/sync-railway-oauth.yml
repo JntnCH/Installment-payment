@@ -12,11 +12,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: railway-oauth-secrets-sync
+  group: railway-auth-secrets-sync
   cancel-in-progress: false
 
 jobs:
-  sync-oauth-secrets:
+  sync-auth-secrets:
     name: Sync Google, LINE, and Telegram authentication variables
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -45,15 +45,11 @@ jobs:
       - name: Sync variables without deploying
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          LINE_CHANNEL_ID: ${{ secrets.LINE_CHANNEL_ID }}
+          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          LINE_CHANNEL_ID: ${{ secrets.LINE_CHANNEL_ID }}
-          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          LINE_CHANNEL_ID: ${{ secrets.LINE_CHANNEL_ID }}
-          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
         shell: bash
         run: |
           set -euo pipefail
