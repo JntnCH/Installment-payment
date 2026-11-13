@@ -45,6 +45,7 @@ jobs:
       - name: Sync variables without deploying
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           LINE_CHANNEL_ID: ${{ secrets.LINE_CHANNEL_ID }}
