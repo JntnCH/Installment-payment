@@ -15,7 +15,7 @@ export default function AccountConnections() {
     return <section className="mb-5 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-600">ไม่สามารถตรวจสอบบัญชีที่เชื่อมต่อได้</section>;
   }
 
-  const connected = identities.data;
+  const connected = identities.data ?? [];
 
   return (
     <section className="mb-5 rounded-xl border bg-white p-4">
