@@ -2,6 +2,11 @@ name: Sync OAuth secrets to Railway
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/google-line-multitenant-auth
+    paths:
+      - .github/workflows/sync-railway-oauth.yml
 
 permissions:
   contents: read
