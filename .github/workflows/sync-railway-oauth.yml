@@ -1,4 +1,4 @@
-name: Sync OAuth secrets to Railway
+name: Sync authentication secrets to Railway
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   sync-oauth-secrets:
-    name: Sync Google and LINE OAuth variables
+    name: Sync Google, LINE, and Telegram authentication variables
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -31,10 +31,11 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           LINE_CHANNEL_ID: ${{ secrets.LINE_CHANNEL_ID }}
           LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          for name in RAILWAY_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET LINE_CHANNEL_ID LINE_CHANNEL_SECRET; do
+          for name in RAILWAY_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET LINE_CHANNEL_ID LINE_CHANNEL_SECRET TELEGRAM_BOT_TOKEN; do
             if [[ -z "${!name:-}" ]]; then
               echo "::error::Missing GitHub Actions secret: $name"
               exit 1
@@ -58,6 +59,7 @@ jobs:
             "LINE_CHANNEL_ID=$LINE_CHANNEL_ID" \
             "LINE_CHANNEL_SECRET=$LINE_CHANNEL_SECRET" \
             "LINE_REDIRECT_URI=https://installment-payment-production.up.railway.app/api/auth/line/callback" \
+            "TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN" \
             --service "Installment-payment" \
             --environment "production" \
             --skip-deploys

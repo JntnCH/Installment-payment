@@ -29,7 +29,7 @@ function verifyTelegramInitData(initData: string) {
   }
 
   const dataCheckString = [...params.entries()]
-    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+    .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => `${key}=${value}`)
     .join("\n");
 
