@@ -15,7 +15,7 @@ export default function AccountConnections() {
     return <section className="mb-5 rounded-xl border border-red-200 bg-white p-4 text-sm text-red-600">ไม่สามารถตรวจสอบบัญชีที่เชื่อมต่อได้</section>;
   }
 
-  const connected = new Map(identities.data.map(item => [item.provider, item]));
+  const connected = identities.data;
 
   return (
     <section className="mb-5 rounded-xl border bg-white p-4">
@@ -23,7 +23,7 @@ export default function AccountConnections() {
       <p className="mt-1 text-sm text-stone-500">เชื่อม Google หรือ LINE เพิ่มเข้ากับบัญชีปัจจุบัน โดยข้อมูลสัญญาและรายการผ่อนชำระจะยังอยู่ในบัญชีเดิม</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {(["google", "line"] as const).map(provider => {
-          const identity = connected.get(provider);
+          const identity = connected.find(item => item.provider === provider);
           const label = provider === "google" ? "Google" : "LINE";
           return (
             <div key={provider} className="flex items-center justify-between gap-3 rounded-lg border p-3">
