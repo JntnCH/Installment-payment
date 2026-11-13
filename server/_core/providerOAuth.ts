@@ -54,7 +54,6 @@ function isConfigured(provider: Provider) {
     config.clientId &&
     config.clientSecret &&
     redirectUri(provider) &&
-    ENV.appId &&
     ENV.cookieSecret &&
     ENV.databaseUrl
   );
