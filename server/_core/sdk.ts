@@ -208,7 +208,8 @@ class SDKServer {
       const { payload } = await jwtVerify(cookieValue, secretKey, {
         algorithms: ["HS256"],
       });
-      const { openId, appId, name } = payload as Record<string, unknown>;
+      const { openId, name } = payload as Record<string, unknown>;
+      const appId = payload.appId;
 
       if (
         !isNonEmptyString(openId) ||
@@ -220,7 +221,7 @@ class SDKServer {
 
       return {
         openId,
-        appId,
+        ...(isNonEmptyString(appId) ? { appId } : {}),
         name,
       };
     } catch (error) {
