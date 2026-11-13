@@ -25,6 +25,25 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
+/** External login identities linked to one internal user account. */
+export const authIdentities = mysqlTable("auth_identities", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: mysqlEnum("provider", ["google", "line"]).notNull(),
+  providerUserId: varchar("providerUserId", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  displayName: text("displayName"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({
+  providerIdentityUnique: uniqueIndex("auth_identity_provider_user_uq").on(table.provider, table.providerUserId),
+  userProviderUnique: uniqueIndex("auth_identity_user_provider_uq").on(table.userId, table.provider),
+  userIdx: index("auth_identity_user_idx").on(table.userId),
+}));
+
+export type AuthIdentity = typeof authIdentities.$inferSelect;
+export type InsertAuthIdentity = typeof authIdentities.$inferInsert;
+
 export const parties = mysqlTable("ledger_parties", {
   id: varchar("id", { length: 64 }).primaryKey(),
   ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
