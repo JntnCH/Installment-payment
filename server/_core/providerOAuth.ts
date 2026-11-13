@@ -11,8 +11,8 @@ import { sdk } from "./sdk";
 type Provider = "google" | "line";
 
 const STATE_COOKIE: Record<Provider, string> = {
-  google: "__Host-google_oauth_state",
-  line: "__Host-line_oauth_state",
+  google: "google_oauth_state",
+  line: "line_oauth_state",
 };
 
 function makeState() {
@@ -50,7 +50,14 @@ function providerConfig(provider: Provider) {
 
 function isConfigured(provider: Provider) {
   const config = providerConfig(provider);
-  return Boolean(config.clientId && config.clientSecret && redirectUri(provider));
+  return Boolean(
+    config.clientId &&
+    config.clientSecret &&
+    redirectUri(provider) &&
+    ENV.appId &&
+    ENV.cookieSecret &&
+    ENV.databaseUrl
+  );
 }
 
 function startLogin(provider: Provider, req: Request, res: Response) {
