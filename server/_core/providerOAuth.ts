@@ -59,16 +59,32 @@ function isConfigured(provider: Provider) {
   );
 }
 
-function startLogin(provider: Provider, req: Request, res: Response) {
+async function startLogin(provider: Provider, req: Request, res: Response) {
   if (!isConfigured(provider)) {
     res.status(503).send(`${provider} OAuth is not configured`);
     return;
   }
 
+  const intent = req.query.intent === "link" ? "link" : "login";
+  let linkUserId: number | null = null;
+  if (intent === "link") {
+    try {
+      const currentUser = await sdk.authenticateRequest(req);
+      linkUserId = currentUser.id;
+    } catch {
+      res.redirect(302, "/?auth=link-session-required");
+      return;
+    }
+  }
+
   const state = makeState();
-  const cookieOptions = getSessionCookieOptions(req);
-  res.cookie(STATE_COOKIE[provider], state, {
-    ...cookieOptions,
+  const stateCookie = Buffer.from(JSON.stringify({
+    state,
+    intent,
+    linkUserId,
+  })).toString("base64url");
+  res.cookie(STATE_COOKIE[provider], stateCookie, {
+    ...getSessionCookieOptions(req),
     httpOnly: true,
     sameSite: "lax",
     maxAge: 10 * 60 * 1000,
@@ -139,7 +155,13 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
   const cookies = parseCookieHeader(req.headers.cookie ?? "");
   const state = typeof req.query.state === "string" ? req.query.state : "";
   const code = typeof req.query.code === "string" ? req.query.code : "";
-  const expectedState = cookies[STATE_COOKIE[provider]] ?? "";
+  const stateCookie = cookies[STATE_COOKIE[provider]] ?? "";
+  let stateData: { state: string; intent: "login" | "link"; linkUserId: number | null } | null = null;
+  try {
+    stateData = JSON.parse(Buffer.from(stateCookie, "base64url").toString("utf8"));
+  } catch {
+    stateData = null;
+  }
 
   res.clearCookie(STATE_COOKIE[provider], {
     ...getSessionCookieOptions(req),
@@ -147,7 +169,7 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
     maxAge: 0,
   });
 
-  if (!state || !expectedState || !safeEqual(state, expectedState) || !code) {
+  if (!state || !stateData?.state || !safeEqual(state, stateData.state) || !code) {
     res.status(403).send("Invalid or expired OAuth state");
     return;
   }
@@ -159,6 +181,23 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
       : (tokens.id_token ? await getLineProfile(tokens.id_token) : null);
 
     if (!profile) throw new Error("OAuth provider did not return required tokens");
+
+    if (stateData.intent === "link") {
+      if (!Number.isSafeInteger(stateData.linkUserId) || !stateData.linkUserId) {
+        throw new Error("Invalid account-link state");
+      }
+      const currentUser = await sdk.authenticateRequest(req);
+      if (currentUser.id !== stateData.linkUserId) {
+        throw new Error("The signed-in account changed during provider linking");
+      }
+      await db.linkAuthIdentity({
+        userId: currentUser.id,
+        provider,
+        ...profile,
+      });
+      res.redirect(302, "/?auth=linked");
+      return;
+    }
 
     const user = await db.getUserByAuthIdentity(provider, profile.providerUserId)
       ?? await db.createUserForAuthIdentity({ provider, ...profile });
@@ -174,13 +213,13 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
     res.redirect(302, "/");
   } catch (error) {
     console.error(`[${provider} OAuth] Callback failed:`, error);
-    res.redirect(302, "/?auth=failed");
+    res.redirect(302, stateData.intent === "link" ? "/?auth=link-failed" : "/?auth=failed");
   }
 }
 
 export function registerProviderOAuthRoutes(app: Express) {
-  app.get("/api/auth/google", (req, res) => startLogin("google", req, res));
+  app.get("/api/auth/google", (req, res) => void startLogin("google", req, res));
   app.get("/api/auth/google/callback", (req, res) => void completeLogin("google", req, res));
-  app.get("/api/auth/line", (req, res) => startLogin("line", req, res));
+  app.get("/api/auth/line", (req, res) => void startLogin("line", req, res));
   app.get("/api/auth/line/callback", (req, res) => void completeLogin("line", req, res));
 }
