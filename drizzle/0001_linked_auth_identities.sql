@@ -1,7 +1,7 @@
 CREATE TABLE `auth_identities` (
   `id` int AUTO_INCREMENT NOT NULL,
   `userId` int NOT NULL,
-  `provider` enum('google','line') NOT NULL,
+  `provider` enum('google','line','telegram') NOT NULL,
   `providerUserId` varchar(255) NOT NULL,
   `email` varchar(320),
   `displayName` text,

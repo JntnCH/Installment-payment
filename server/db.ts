@@ -6,7 +6,6 @@ import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -20,10 +19,7 @@ export async function getDb() {
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-
+  if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
   if (!db) {
     console.warn("[Database] Cannot upsert user: database not available");
@@ -31,11 +27,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   }
 
   try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
+    const values: InsertUser = { openId: user.openId };
     const updateSet: Record<string, unknown> = {};
-
     const textFields = ["name", "email", "loginMethod"] as const;
     type TextField = (typeof textFields)[number];
 
@@ -48,7 +41,6 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     };
 
     textFields.forEach(assignNullable);
-
     if (user.lastSignedIn !== undefined) {
       values.lastSignedIn = user.lastSignedIn;
       updateSet.lastSignedIn = user.lastSignedIn;
@@ -57,21 +49,13 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
+      values.role = "admin";
+      updateSet.role = "admin";
     }
+    if (!values.lastSignedIn) values.lastSignedIn = new Date();
+    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
 
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
+    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -84,16 +68,14 @@ export async function getUserByOpenId(openId: string) {
     console.warn("[Database] Cannot get user: database not available");
     return undefined;
   }
-
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
   return result.length > 0 ? result[0] : undefined;
 }
 
 export type AuthProvider = AuthIdentity["provider"];
 
 function providerOpenId(provider: AuthProvider, providerUserId: string): string {
-  const prefix = provider === "google" ? "g_" : "l_";
+  const prefix = provider === "google" ? "g_" : provider === "line" ? "l_" : "t_";
   const digest = createHash("sha256").update(providerUserId).digest("hex");
   return prefix + digest.slice(0, 62);
 }
@@ -101,21 +83,15 @@ function providerOpenId(provider: AuthProvider, providerUserId: string): string 
 export async function getUserByAuthIdentity(provider: AuthProvider, providerUserId: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
-
   const rows = await db
     .select({ user: users })
     .from(authIdentities)
     .innerJoin(users, eq(authIdentities.userId, users.id))
-    .where(and(
-      eq(authIdentities.provider, provider),
-      eq(authIdentities.providerUserId, providerUserId),
-    ))
+    .where(and(eq(authIdentities.provider, provider), eq(authIdentities.providerUserId, providerUserId)))
     .limit(1);
-
   return rows[0]?.user;
 }
 
-/** Create a distinct account on first provider login; never merge by email. */
 export async function createUserForAuthIdentity(input: {
   provider: AuthProvider;
   providerUserId: string;
@@ -131,10 +107,7 @@ export async function createUserForAuthIdentity(input: {
       .select({ user: users })
       .from(authIdentities)
       .innerJoin(users, eq(authIdentities.userId, users.id))
-      .where(and(
-        eq(authIdentities.provider, input.provider),
-        eq(authIdentities.providerUserId, input.providerUserId),
-      ))
+      .where(and(eq(authIdentities.provider, input.provider), eq(authIdentities.providerUserId, input.providerUserId)))
       .limit(1);
     if (existing[0]) return existing[0].user;
 
@@ -146,7 +119,6 @@ export async function createUserForAuthIdentity(input: {
       loginMethod: input.provider,
       lastSignedIn: new Date(),
     });
-
     const createdRows = await tx.select().from(users).where(eq(users.openId, openId)).limit(1);
     const user = createdRows[0];
     if (!user) throw new Error("Failed to create user account");
@@ -162,7 +134,6 @@ export async function createUserForAuthIdentity(input: {
   });
 }
 
-/** Link a provider to an already authenticated account; email is not used to merge accounts. */
 export async function linkAuthIdentity(input: {
   userId: number;
   provider: AuthProvider;
@@ -183,7 +154,6 @@ export async function linkAuthIdentity(input: {
       eq(authIdentities.provider, input.provider),
       eq(authIdentities.providerUserId, input.providerUserId),
     )).limit(1);
-
     if (identity[0]) {
       if (identity[0].userId !== input.userId) {
         throw new Error("This provider account is already linked to another user");
@@ -204,7 +174,6 @@ export async function linkAuthIdentity(input: {
       email: input.email ?? null,
       displayName: input.name ?? null,
     });
-
     const linked = await tx.select().from(authIdentities).where(and(
       eq(authIdentities.provider, input.provider),
       eq(authIdentities.providerUserId, input.providerUserId),
@@ -213,7 +182,6 @@ export async function linkAuthIdentity(input: {
     return linked[0];
   });
 }
-
 
 export async function listAuthIdentities(userId: number) {
   const db = await getDb();

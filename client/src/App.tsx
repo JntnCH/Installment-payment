@@ -1,18 +1,41 @@
+import { useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "./const";
+import { authenticateWithTelegram, startLogin } from "./const";
 
 function LoginScreen() {
+  const [telegramLoading, setTelegramLoading] = useState(false);
+  const [telegramError, setTelegramError] = useState("");
+  const isTelegramMiniApp = Boolean(window.Telegram?.WebApp?.initData);
+
+  const loginWithTelegram = async () => {
+    setTelegramLoading(true);
+    setTelegramError("");
+    try {
+      await authenticateWithTelegram("login");
+    } catch (error) {
+      setTelegramError(error instanceof Error ? error.message : "เข้าสู่ระบบ Telegram ไม่สำเร็จ");
+      setTelegramLoading(false);
+    }
+  };
+
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#F6F4F0] p-6">
       <section className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm border border-stone-200">
         <h1 className="text-2xl font-semibold text-center text-stone-900">เข้าสู่ระบบ</h1>
         <p className="mt-2 text-sm text-center text-stone-500">เลือกบัญชีที่ต้องการใช้เพื่อเข้าใช้งานสมุดบัญชี</p>
         <div className="mt-7 grid gap-3">
+          {isTelegramMiniApp ? (
+            <button type="button" disabled={telegramLoading} onClick={() => void loginWithTelegram()} className="w-full rounded-xl bg-[#229ED9] px-4 py-3 text-sm font-medium text-white hover:bg-[#168ac2] disabled:opacity-60">
+              {telegramLoading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบด้วย Telegram"}
+            </button>
+          ) : (
+            <p className="rounded-xl bg-sky-50 px-4 py-3 text-center text-xs text-sky-800">หากต้องการใช้ Telegram ให้เปิดหน้านี้ผ่าน Telegram Mini App</p>
+          )}
           <button type="button" onClick={() => startLogin("google")} className="w-full rounded-xl bg-stone-900 px-4 py-3 text-sm font-medium text-white hover:bg-stone-700">
             เข้าสู่ระบบด้วย Google
           </button>
@@ -20,8 +43,8 @@ function LoginScreen() {
             เข้าสู่ระบบด้วย LINE
           </button>
         </div>
-        {new URLSearchParams(window.location.search).get("auth") === "failed" && (
-          <p role="alert" className="mt-4 text-center text-sm text-red-600">เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง</p>
+        {(telegramError || new URLSearchParams(window.location.search).get("auth") === "failed") && (
+          <p role="alert" className="mt-4 text-center text-sm text-red-600">{telegramError || "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"}</p>
         )}
       </section>
     </main>
