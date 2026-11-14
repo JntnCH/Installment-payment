@@ -1,5 +1,7 @@
 export const ENV = {
-  manusProjectId: process.env.MANUS_PROJECT_ID ?? "",
+  // Railway currently provides VITE_APP_ID for the existing Manus OAuth flow.
+  // Prefer the server-only name when configured, but retain compatibility.
+  manusProjectId: process.env.MANUS_PROJECT_ID ?? process.env.VITE_APP_ID ?? "",
   cookieSecret: process.env.JWT_SECRET ?? "",
   databaseUrl: process.env.DATABASE_URL ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
