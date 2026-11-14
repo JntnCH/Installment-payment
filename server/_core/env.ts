@@ -1,9 +1,18 @@
 export const ENV = {
-  appId: process.env.VITE_APP_ID ?? "",
+  // Railway currently provides VITE_APP_ID for the existing Manus OAuth flow.
+  // Prefer the server-only name when configured, but retain compatibility.
+  manusProjectId: process.env.MANUS_PROJECT_ID ?? process.env.VITE_APP_ID ?? "",
   cookieSecret: process.env.JWT_SECRET ?? "",
   databaseUrl: process.env.DATABASE_URL ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? "",
+  lineChannelId: process.env.LINE_CHANNEL_ID ?? "",
+  lineChannelSecret: process.env.LINE_CHANNEL_SECRET ?? "",
+  lineRedirectUri: process.env.LINE_REDIRECT_URI ?? "",
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",

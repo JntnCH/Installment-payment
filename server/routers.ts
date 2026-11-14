@@ -42,6 +42,7 @@ import {
   sheetsProxyConfigured,
 } from "./sheetsProxy";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { listAuthIdentities } from "./db";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
@@ -59,7 +60,9 @@ function stripDemoExport(data: Awaited<ReturnType<typeof exportAllData>>) {
   };
 }
 
-function emptyStats() {
+type DashboardStats = Awaited<ReturnType<typeof getDashboardStats>>;
+
+function emptyStats(): DashboardStats {
   return {
     debtorCount: 0,
     creditorCount: 0,
@@ -84,7 +87,9 @@ function emptyStats() {
     overdue: { count: 0, amount: 0 },
     today: { count: 0, amount: 0 },
     soon: { count: 0, amount: 0 },
-    alerts: [] as unknown[],
+    alerts: [],
+    monthlyTimeline: [],
+    recentTransactions: [],
   };
 }
 
@@ -92,6 +97,7 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    identities: protectedProcedure.query(({ ctx }) => listAuthIdentities(ctx.user.id)),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -165,11 +171,17 @@ export const appRouter = router({
       const data = await exportAllData(ctx.user.id);
       return stripDemoExport(data);
     }),
+    // Arbitrary user-supplied webhook URLs can exfiltrate private ledger data.
+    // Keep the route typed for the current UI, but block it until per-user OAuth
+    // and explicit spreadsheet ownership are implemented.
     syncGoogleSheets: protectedProcedure
       .input(webhookSyncInputSchema)
-      .mutation(({ ctx, input }) =>
-        syncToGoogleSheetsWebhook(ctx.user.id, input.webhookUrl, input.syncTarget),
-      ),
+      .mutation(() => {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "ปิดการซิงค์ผ่าน Webhook ชั่วคราว เพื่อป้องกันข้อมูลบัญชีรั่วไหล",
+        });
+      }),
     callDialogflowService: publicProcedure
       .input(dialogflowServiceSchema)
       .mutation(async ({ input }) => callDialogflowServiceEndpoint(input)),
@@ -199,25 +211,9 @@ export const appRouter = router({
       .mutation(({ ctx, input }) => createLedgerContract(ctx.user.id, input)),
     createTransaction: protectedProcedure
       .input(transactionInputSchema)
-      .mutation(async ({ ctx, input }) => {
-        const created = await createLedgerTransaction(ctx.user.id, input);
-        if (sheetsProxyConfigured() && Number(input.amount) > 0) {
-          try {
-            await createSheetsTransaction({
-              type: input.type === "disbursement" ? "รายจ่าย" : "รายรับ",
-              item: input.note || input.type || "รายการผ่อนชำระ",
-              amount: Number(input.amount),
-              account: input.source || "ระบบผ่อนชำระ",
-              recorderName: String(ctx.user.name || ctx.user.id),
-              channel: "Installment Ledger",
-              note: input.note || "",
-            });
-          } catch (err) {
-            console.warn("[sheets dual-write]", err instanceof Error ? err.message : err);
-          }
-        }
-        return created;
-      }),
+      .mutation(({ ctx, input }) =>
+        createLedgerTransaction(ctx.user.id, input),
+      ),
     markSchedulePaid: protectedProcedure
       .input(schedulePaymentInputSchema)
       .mutation(({ ctx, input }) => markSchedulePaid(ctx.user.id, input)),

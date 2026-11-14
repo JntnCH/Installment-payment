@@ -20,7 +20,7 @@ const isNonEmptyString = (value: unknown): value is string =>
 
 export type SessionPayload = {
   openId: string;
-  appId: string;
+  appId?: string;
   name: string;
 };
 
@@ -47,7 +47,7 @@ class OAuthService {
     state: string
   ): Promise<ExchangeTokenResponse> {
     const payload: ExchangeTokenRequest = {
-      clientId: ENV.appId,
+      clientId: ENV.manusProjectId,
       grantType: "authorization_code",
       code,
       redirectUri: this.decodeState(state),
@@ -170,7 +170,6 @@ class SDKServer {
     return this.signSession(
       {
         openId,
-        appId: ENV.appId,
         name: options.name || "",
       },
       options
@@ -188,7 +187,7 @@ class SDKServer {
 
     return new SignJWT({
       openId: payload.openId,
-      appId: payload.appId,
+      ...(payload.appId ? { appId: payload.appId } : {}),
       name: payload.name,
     })
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
@@ -198,7 +197,7 @@ class SDKServer {
 
   async verifySession(
     cookieValue: string | undefined | null
-  ): Promise<{ openId: string; appId: string; name: string } | null> {
+  ): Promise<{ openId: string; appId?: string; name: string } | null> {
     if (!cookieValue) {
       console.warn("[Auth] Missing session cookie");
       return null;
@@ -209,11 +208,11 @@ class SDKServer {
       const { payload } = await jwtVerify(cookieValue, secretKey, {
         algorithms: ["HS256"],
       });
-      const { openId, appId, name } = payload as Record<string, unknown>;
+      const { openId, name } = payload as Record<string, unknown>;
+      const appId = payload.appId;
 
       if (
         !isNonEmptyString(openId) ||
-        !isNonEmptyString(appId) ||
         !isNonEmptyString(name)
       ) {
         console.warn("[Auth] Session payload missing required fields");
@@ -222,7 +221,7 @@ class SDKServer {
 
       return {
         openId,
-        appId,
+        ...(isNonEmptyString(appId) ? { appId } : {}),
         name,
       };
     } catch (error) {
@@ -236,7 +235,7 @@ class SDKServer {
   ): Promise<GetUserInfoWithJwtResponse> {
     const payload: GetUserInfoWithJwtRequest = {
       jwtToken,
-      projectId: ENV.appId,
+      projectId: ENV.manusProjectId,
     };
 
     const { data } = await this.client.post<GetUserInfoWithJwtResponse>(

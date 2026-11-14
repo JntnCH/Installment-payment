@@ -552,7 +552,7 @@ export default function GoogleSheetsSync() {
         webhookUrl: syncUrl.trim(),
         syncTarget,
       });
-      toast.success(res.message || "ซิงก์ข้อมูลผ่าน Webhook สำเร็จ");
+      toast.success("ส่งคำขอซิงก์ข้อมูลแล้ว");
     } catch (err: any) {
       toast.error(`ซิงก์ไม่สำเร็จ: ${err.message}`);
     } finally {

@@ -7,6 +7,7 @@ import IndividualLedger from "@/components/IndividualLedger";
 import InstallmentGoodsManager from "@/components/InstallmentGoodsManager";
 import LoanCalculator from "@/components/LoanCalculator";
 import GoogleSheetsSync from "@/components/GoogleSheetsSync";
+import AccountConnections from "@/components/AccountConnections";
 import { trpc } from "@/lib/trpc";
 
 export default function Home() {
@@ -74,7 +75,7 @@ export default function Home() {
         />
       )}
 
-      {activeTab === "sheets" && <GoogleSheetsSync />}
+      {activeTab === "sheets" && <><AccountConnections /><GoogleSheetsSync /></>}
     </AppShell>
   );
 }

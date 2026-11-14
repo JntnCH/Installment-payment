@@ -1,0 +1,66 @@
+name: Sync authentication secrets to Railway
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/google-line-multitenant-auth
+    paths:
+      - .github/workflows/sync-railway-oauth.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: railway-auth-secrets-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-auth-secrets:
+    name: Sync Google, LINE, and Telegram authentication variables
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli
+
+      - name: Validate required secrets
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          LINE_CHANNEL_ID: ${{ secrets.LINE_CHANNEL_ID }}
+          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in RAILWAY_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET LINE_CHANNEL_ID LINE_CHANNEL_SECRET TELEGRAM_BOT_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Sync variables without deploying
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          LINE_CHANNEL_ID: ${{ secrets.LINE_CHANNEL_ID }}
+          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          railway variable set \
+            "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" \
+            "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" \
+            "GOOGLE_REDIRECT_URI=https://installment-payment-production.up.railway.app/api/auth/google/callback" \
+            "LINE_CHANNEL_ID=$LINE_CHANNEL_ID" \
+            "LINE_CHANNEL_SECRET=$LINE_CHANNEL_SECRET" \
+            "LINE_REDIRECT_URI=https://installment-payment-production.up.railway.app/api/auth/line/callback" \
+            "TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN" \
+            --service "Installment-payment" \
+            --environment "production" \
+            --skip-deploys
