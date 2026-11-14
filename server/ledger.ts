@@ -256,8 +256,63 @@ export async function createLedgerParty(ownerId: number, input: PartyInput) {
   const now = new Date();
 
   if (db) {
-    await db.insert(parties).values({ id, ownerId, ...input, status: "active" });
-    return getOwnedParty(ownerId, id).then(row => (row ? toParty(row) : null));
+    try {
+      // Avoid a duplicate insert when the client retries the same save.
+      const [existing] = await db
+        .select()
+        .from(parties)
+        .where(
+          and(
+            eq(parties.ownerId, ownerId),
+            eq(parties.role, input.role),
+            eq(parties.displayName, input.displayName)
+          )
+        )
+        .limit(1);
+
+      if (existing) return toParty(existing);
+
+      await db.insert(parties).values({
+        id,
+        ownerId,
+        displayName: input.displayName,
+        role: input.role,
+        phone: input.phone || null,
+        note: input.note || null,
+        status: "active",
+      });
+      return getOwnedParty(ownerId, id).then(row => (row ? toParty(row) : null));
+    } catch (error) {
+      const dbError = error as {
+        code?: string;
+        errno?: number;
+        sqlMessage?: string;
+        message?: string;
+      };
+      console.error("[Ledger] createLedgerParty database insert failed", {
+        code: dbError.code,
+        errno: dbError.errno,
+        sqlMessage: dbError.sqlMessage,
+        message: dbError.message,
+      });
+
+      // Another request may have inserted the same party between the lookup and insert.
+      if (dbError.code === "ER_DUP_ENTRY" || dbError.errno === 1062) {
+        const [existing] = await db
+          .select()
+          .from(parties)
+          .where(
+            and(
+              eq(parties.ownerId, ownerId),
+              eq(parties.role, input.role),
+              eq(parties.displayName, input.displayName)
+            )
+          )
+          .limit(1);
+        if (existing) return toParty(existing);
+      }
+      throw error;
+    }
   }
   const row: PartyRow = {
     id,
