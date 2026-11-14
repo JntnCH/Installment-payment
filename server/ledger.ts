@@ -691,6 +691,7 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
       const redistributedCents = outstandingCents - paymentCents;
       const baseOtherCents = Math.floor(redistributedCents / otherAllocations.length);
       let otherRemainingCents = redistributedCents;
+      let otherIndex = 0;
 
       for (let index = 0; index < allocations.length; index++) {
         if (index === selectedIndex) {
@@ -698,10 +699,11 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
           continue;
         }
 
-        const isLastOther = index === allocations.length - 1;
+        const isLastOther = otherIndex === otherAllocations.length - 1;
         const allocationCents = isLastOther ? otherRemainingCents : baseOtherCents;
         allocations[index] = { ...allocations[index], allocationCents };
         otherRemainingCents -= allocationCents;
+        otherIndex += 1;
       }
     }
 
