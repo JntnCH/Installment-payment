@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, feature/debtor-daily-monthly-payment, feature/google-line-multitenant-auth]
+    branches: [main, feature/debtor-daily-monthly-payment]
 
 permissions:
   contents: read
