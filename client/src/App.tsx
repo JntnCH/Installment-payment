@@ -5,12 +5,13 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { authenticateWithTelegram, startLogin } from "./const";
+import { authenticateWithTelegram, startLogin, startManusLogin } from "./const";
 
 function LoginScreen() {
   const [telegramLoading, setTelegramLoading] = useState(false);
   const [telegramError, setTelegramError] = useState("");
   const isTelegramMiniApp = Boolean(window.Telegram?.WebApp?.initData);
+  const authError = new URLSearchParams(window.location.search).get("auth");
 
   const loginWithTelegram = async () => {
     setTelegramLoading(true);
@@ -23,12 +24,21 @@ function LoginScreen() {
     }
   };
 
+  const authErrorMessage: Record<string, string> = {
+    failed: "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+    "link-session-required": "กรุณาเข้าสู่ระบบบัญชีเดิมก่อนเชื่อมบัญชีใหม่",
+    "legacy-config-missing": "ระบบเข้าสู่ระบบบัญชีเดิมยังไม่ได้ตั้งค่า กรุณาติดต่อผู้ดูแลระบบ",
+  };
+
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#F6F4F0] p-6">
       <section className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm border border-stone-200">
         <h1 className="text-2xl font-semibold text-center text-stone-900">เข้าสู่ระบบ</h1>
         <p className="mt-2 text-sm text-center text-stone-500">เลือกบัญชีที่ต้องการใช้เพื่อเข้าใช้งานสมุดบัญชี</p>
         <div className="mt-7 grid gap-3">
+          <button type="button" onClick={startManusLogin} className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-sm font-medium text-stone-900 hover:bg-stone-50">
+            เข้าสู่ระบบด้วยบัญชีเดิม
+          </button>
           {isTelegramMiniApp ? (
             <button type="button" disabled={telegramLoading} onClick={() => void loginWithTelegram()} className="w-full rounded-xl bg-[#229ED9] px-4 py-3 text-sm font-medium text-white hover:bg-[#168ac2] disabled:opacity-60">
               {telegramLoading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบด้วย Telegram"}
@@ -43,8 +53,10 @@ function LoginScreen() {
             เข้าสู่ระบบด้วย LINE
           </button>
         </div>
-        {(telegramError || new URLSearchParams(window.location.search).get("auth") === "failed") && (
-          <p role="alert" className="mt-4 text-center text-sm text-red-600">{telegramError || "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"}</p>
+        {(telegramError || authErrorMessage[authError ?? ""]) && (
+          <p role="alert" className="mt-4 text-center text-sm text-red-600">
+            {telegramError || authErrorMessage[authError ?? ""]}
+          </p>
         )}
       </section>
     </main>
