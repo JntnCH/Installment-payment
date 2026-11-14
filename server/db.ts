@@ -102,7 +102,8 @@ export async function createUserForAuthIdentity(input: {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
 
-  return db.transaction(async tx => {
+  try {
+    return await db.transaction(async tx => {
     const existing = await tx
       .select({ user: users })
       .from(authIdentities)
@@ -131,7 +132,14 @@ export async function createUserForAuthIdentity(input: {
       displayName: input.name ?? null,
     });
     return user;
-  });
+    });
+  } catch (error) {
+    // A simultaneous first login can race on the unique provider identity.
+    // Re-read only the exact provider subject; never merge by email.
+    const existing = await getUserByAuthIdentity(input.provider, input.providerUserId);
+    if (existing) return existing;
+    throw error;
+  }
 }
 
 export async function linkAuthIdentity(input: {
