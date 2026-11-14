@@ -202,6 +202,8 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
     const user = await db.getUserByAuthIdentity(provider, profile.providerUserId)
       ?? await db.createUserForAuthIdentity({ provider, ...profile });
 
+    await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
+
     const sessionToken = await sdk.createSessionToken(user.openId, {
       name: user.name || profile.name || provider,
       expiresInMs: ONE_YEAR_MS,
