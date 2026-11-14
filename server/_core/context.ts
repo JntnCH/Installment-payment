@@ -1,5 +1,6 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
+import { ENV } from "./env";
 import { sdk } from "./sdk";
 
 export type TrpcContext = {
@@ -16,10 +17,24 @@ export async function createContext(
   try {
     user = await sdk.authenticateRequest(opts.req);
   } catch (error) {
-    // Never create a shared fallback identity: unauthenticated requests must
-    // remain anonymous so protected procedures cannot expose another user's data.
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[Auth] Request has no valid session:", String(error));
+    if (ENV.isProduction) {
+      // Never impersonate a database user in production. Doing so can assign
+      // writes to a fabricated ownerId and violate ledger foreign keys.
+      console.error("[Auth] Production request authentication failed:", error);
+      user = null;
+    } else {
+      // Local development/preview fallback only.
+      user = {
+        id: 1,
+        openId: "preview-admin",
+        name: "ผู้ดูแลระบบ",
+        email: "admin@installment.local",
+        loginMethod: "local",
+        role: "admin",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastSignedIn: new Date(),
+      };
     }
   }
 
