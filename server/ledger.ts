@@ -658,6 +658,11 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
       return sum + Math.max(0, amountCents - actualPaidCents);
     }, 0);
 
+    const paymentCents = Math.max(0, Math.round(input.paidAmount * 100));
+    if (paymentCents > outstandingCents) {
+      throw new Error("ยอดชำระสูงกว่ายอดหนี้คงเหลือทั้งหมด กรุณาตรวจสอบยอดอีกครั้ง");
+    }
+
     let remainingCents = outstandingCents;
     const baseCents = Math.floor(outstandingCents / pendingSchedules.length);
     const allocations = pendingSchedules.map((row, index) => {
@@ -670,16 +675,39 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
       };
     });
 
-    const selectedAllocation = allocations.find(item => item.row.id === schedule.id);
-    if (!selectedAllocation) throw new Error("ไม่พบงวดที่เลือกในรายการค้างชำระ");
+    const selectedIndex = allocations.findIndex(item => item.row.id === schedule.id);
+    if (selectedIndex < 0) throw new Error("ไม่พบงวดที่เลือกในรายการค้างชำระ");
 
-    const paymentCents = Math.max(0, Math.round(input.paidAmount * 100));
+    // Allow an irregular/early larger payment when it is covered by the
+    // contract's total outstanding balance. Redistribute the remainder
+    // across the other unpaid installments instead of rejecting it.
+    const selectedAllocation = allocations[selectedIndex];
     if (paymentCents > selectedAllocation.allocationCents) {
-      throw new Error("ยอดชำระสูงกว่ายอดคงเหลือของงวด กรุณาตรวจสอบยอดอีกครั้ง");
+      const otherAllocations = allocations.filter((_, index) => index !== selectedIndex);
+      if (otherAllocations.length === 0) {
+        throw new Error("ยอดชำระสูงกว่ายอดคงเหลือของงวดสุดท้าย");
+      }
+
+      const redistributedCents = outstandingCents - paymentCents;
+      const baseOtherCents = Math.floor(redistributedCents / otherAllocations.length);
+      let otherRemainingCents = redistributedCents;
+
+      for (let index = 0; index < allocations.length; index++) {
+        if (index === selectedIndex) {
+          allocations[index] = { ...allocations[index], allocationCents: paymentCents };
+          continue;
+        }
+
+        const isLastOther = index === allocations.length - 1;
+        const allocationCents = isLastOther ? otherRemainingCents : baseOtherCents;
+        allocations[index] = { ...allocations[index], allocationCents };
+        otherRemainingCents -= allocationCents;
+      }
     }
 
-    const selectedTotalCents = selectedAllocation.previousPaidCents + selectedAllocation.allocationCents;
-    const newPaidCents = selectedAllocation.previousPaidCents + paymentCents;
+    const finalSelectedAllocation = allocations[selectedIndex];
+    const selectedTotalCents = finalSelectedAllocation.previousPaidCents + finalSelectedAllocation.allocationCents;
+    const newPaidCents = finalSelectedAllocation.previousPaidCents + paymentCents;
     const isFullyPaid = newPaidCents >= selectedTotalCents;
 
     await db.transaction(async tx => {
