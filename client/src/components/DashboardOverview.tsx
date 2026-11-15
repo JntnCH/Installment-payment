@@ -91,7 +91,7 @@ export default function DashboardOverview({
         source: "command_center",
         note: data.note || `รับชำระจากหน้าแรก: ${activePayItem.title}`,
       });
-      await utils.ledger.invalidate();
+      void utils.ledger.getStats.invalidate();
       toast.success("บันทึกการรับชำระเงินเรียบร้อยแล้ว");
     } catch (err: any) {
       toast.error(`เกิดข้อผิดพลาด: ${err.message}`);
