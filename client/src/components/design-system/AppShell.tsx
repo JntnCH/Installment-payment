@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   Menu,
   X,
-  Bot,
+  CalendarDays,
   CreditCard,
   Layers,
   ShoppingBag,
@@ -18,7 +18,7 @@ import {
 
 export type NavTabId =
   | "overview"
-  | "dialogflow"
+  | "monthly_bills"
   | "cashflow"
   | "debt_hub"
   | "installments"
@@ -77,10 +77,10 @@ export const AppShell: React.FC<AppShellProps> = ({
       icon: ArrowLeftRight,
     },
     {
-      id: "dialogflow",
-      label: "ข้อมูลจาก Dialogflow",
-      shortLabel: "Dialogflow",
-      icon: Bot,
+      id: "monthly_bills",
+      label: "บิลรายเดือน",
+      shortLabel: "บิลรายเดือน",
+      icon: CalendarDays,
     },
     {
       id: "sheets",

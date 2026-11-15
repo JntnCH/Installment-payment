@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { AppShell, NavTabId } from "@/components/design-system";
 import DashboardOverview from "@/components/DashboardOverview";
-import DialogflowSheetViewer from "@/components/DialogflowSheetViewer";
+import MonthlyBillsManager from "@/components/MonthlyBillsManager";
 import CashflowManager from "@/components/CashflowManager";
 import IndividualLedger from "@/components/IndividualLedger";
 import InstallmentGoodsManager from "@/components/InstallmentGoodsManager";
@@ -50,7 +50,7 @@ export default function Home() {
 
       {activeTab === "cashflow" && <CashflowManager />}
 
-      {activeTab === "dialogflow" && <DialogflowSheetViewer />}
+      {activeTab === "monthly_bills" && <MonthlyBillsManager />}
 
       {activeTab === "lent" && (
         <IndividualLedger

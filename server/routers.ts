@@ -43,6 +43,8 @@ import {
 } from "./sheetsProxy";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { listAuthIdentities } from "./db";
+import { createMonthlyBill, deleteMonthlyBill, listMonthlyBills, updateMonthlyBill } from "./monthlyBills";
+import { configureGoogleSpreadsheet, getGoogleSheetsStatus } from "./googleSheets";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
@@ -155,6 +157,16 @@ export const appRouter = router({
         }
       }),
   }),
+  monthlyBills: router({
+    googleStatus: protectedProcedure.query(({ ctx }) => getGoogleSheetsStatus(ctx.user.id)),
+    configureGoogleSpreadsheet: protectedProcedure
+      .input(z.object({ spreadsheetId: z.string().trim().min(10).max(255) }))
+      .mutation(({ ctx, input }) => configureGoogleSpreadsheet(ctx.user.id, input.spreadsheetId)),
+    list: protectedProcedure.query(({ ctx }) => listMonthlyBills(ctx.user.id)),
+    create: protectedProcedure.input(z.object({ billName: z.string().trim().min(1).max(160), amount: z.number().positive(), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), status: z.enum(["pending", "paid"]).optional(), note: z.string().max(2000).optional() })).mutation(({ ctx, input }) => createMonthlyBill(ctx.user.id, input)),
+    update: protectedProcedure.input(z.object({ id: z.string().min(1), billName: z.string().trim().min(1).max(160), amount: z.number().positive(), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), status: z.enum(["pending", "paid"]).optional(), note: z.string().max(2000).optional() })).mutation(({ ctx, input }) => updateMonthlyBill(ctx.user.id, input.id, input)),
+    delete: protectedProcedure.input(z.object({ id: z.string().min(1) })).mutation(({ ctx, input }) => deleteMonthlyBill(ctx.user.id, input.id)),
+  }),
   ledger: router({
     getStats: protectedProcedure.query(async ({ ctx }) => {
       const stats = await getDashboardStats(ctx.user.id);
@@ -185,6 +197,15 @@ export const appRouter = router({
     callDialogflowService: publicProcedure
       .input(dialogflowServiceSchema)
       .mutation(async ({ input }) => callDialogflowServiceEndpoint(input)),
+    listProductInstallmentParties: protectedProcedure.query(async ({ ctx }) => {
+      const candidates = await listLedgerParties(ctx.user.id, "creditor");
+      const productParties = await Promise.all(candidates.filter(p => !isDemoId(p.partyId)).map(async party => {
+        const ledger = await getPartyLedger(ctx.user.id, party.partyId);
+        const productContracts = (ledger?.contracts ?? []).filter(contract => contract.title.trim().startsWith("ผ่อน "));
+        return productContracts.length ? { ...party, productContractCount: productContracts.length } : null;
+      }));
+      return productParties.filter((party): party is NonNullable<typeof party> => party !== null);
+    }),
     listParties: protectedProcedure
       .input(partyRoleSchema.optional())
       .query(async ({ ctx, input }) => {
