@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { CalendarDays, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -15,6 +15,7 @@ export default function MonthlyBillsManager() {
     onError: error => toast.error(error.message),
   });
   const [spreadsheetId, setSpreadsheetId] = useState("");
+  const [sheetsExpanded, setSheetsExpanded] = useState(false);
   useEffect(() => {
     if (sheetsStatus.data?.spreadsheetId) setSpreadsheetId(sheetsStatus.data.spreadsheetId);
   }, [sheetsStatus.data?.spreadsheetId]);
@@ -43,23 +44,38 @@ export default function MonthlyBillsManager() {
       <div><div className="text-xs tracking-widest text-stone-500">MONTHLY BILL TRACKER</div><h1 className="text-2xl font-bold mt-1">บิลรายเดือน</h1><p className="text-sm text-stone-500 mt-1">บันทึกวันครบกำหนดและติดตามยอดที่ต้องชำระ</p></div>
       <div className="rounded-xl bg-white border p-3 min-w-32"><div className="text-xs text-stone-500">ยอดค้างชำระ</div><div className="font-bold text-lg">฿{totalPending.toLocaleString("th-TH")}</div></div>
     </div>
-    <section className="rounded-2xl border bg-white p-4 space-y-3">
-      <div className="font-semibold">Google Sheets Auto Sync</div>
-      <p className="text-sm text-stone-500">
-        {sheetsStatus.data?.connected ? `เชื่อมต่อแล้ว ${sheetsStatus.data.connectedEmail ? "· " + sheetsStatus.data.connectedEmail : ""}` : "ยังไม่ได้อนุญาต Google Sheets"}
-        {sheetsStatus.data?.configured ? " · ตั้งค่า Spreadsheet แล้ว" : " · ยังไม่ได้ตั้งค่า Spreadsheet ID"}
-      </p>
-      <button type="button" onClick={() => window.location.assign("/api/auth/google?intent=link")} className="rounded-lg border px-3 py-2 text-sm">
-        {sheetsStatus.data?.connected ? "เชื่อมต่อ Google ใหม่ / อนุญาตสิทธิ์ Sheets" : "เชื่อมต่อ Google Sheets"}
+    <section className="rounded-2xl border bg-white overflow-hidden">
+      <button
+        type="button"
+        aria-expanded={sheetsExpanded}
+        onClick={() => setSheetsExpanded(value => !value)}
+        className="w-full p-4 flex items-center justify-between gap-3 text-left"
+      >
+        <span className="min-w-0">
+          <span className="block font-semibold">Google Sheets Auto Sync</span>
+          <span className="block text-xs text-stone-500 mt-1">
+            {sheetsStatus.data?.connected ? "เชื่อมต่อ Google แล้ว" : "ยังไม่ได้เชื่อมต่อ Google"}
+            {sheetsStatus.data?.configured ? " · ตั้งค่า Spreadsheet แล้ว" : " · ยังไม่ได้ตั้งค่า Spreadsheet ID"}
+          </span>
+        </span>
+        <ChevronDown size={18} className={`shrink-0 transition-transform ${sheetsExpanded ? "rotate-180" : ""}`} />
       </button>
-      {!sheetsStatus.data?.configured && <div className="flex flex-col sm:flex-row gap-2">
-        <input value={spreadsheetId} onChange={event => setSpreadsheetId(event.target.value)} className="min-w-0 flex-1 border rounded-lg p-2.5 text-sm" placeholder="วาง Google Spreadsheet ID" />
-        <button type="button" disabled={!sheetsStatus.data?.connected || configureSheets.isPending || !spreadsheetId.trim()} onClick={() => configureSheets.mutate({ spreadsheetId })} className="rounded-lg bg-stone-900 px-4 py-2.5 text-sm text-white disabled:opacity-50">
-          บันทึก Spreadsheet
+      {sheetsExpanded && <div className="px-4 pb-4 pt-1 border-t space-y-3">
+        <p className="text-sm text-stone-500">
+          {sheetsStatus.data?.connected ? `เชื่อมต่อแล้ว ${sheetsStatus.data.connectedEmail ? "· " + sheetsStatus.data.connectedEmail : ""}` : "ยังไม่ได้อนุญาต Google Sheets"}
+        </p>
+        <button type="button" onClick={() => window.location.assign("/api/auth/google?intent=link")} className="rounded-lg border px-3 py-2 text-sm">
+          {sheetsStatus.data?.connected ? "เชื่อมต่อ Google ใหม่ / อนุญาตสิทธิ์ Sheets" : "เชื่อมต่อ Google Sheets"}
         </button>
+        {!sheetsStatus.data?.configured && <div className="flex flex-col sm:flex-row gap-2">
+          <input value={spreadsheetId} onChange={event => setSpreadsheetId(event.target.value)} className="min-w-0 flex-1 border rounded-lg p-2.5 text-sm" placeholder="วาง Google Spreadsheet ID" />
+          <button type="button" disabled={!sheetsStatus.data?.connected || configureSheets.isPending || !spreadsheetId.trim()} onClick={() => configureSheets.mutate({ spreadsheetId })} className="rounded-lg bg-stone-900 px-4 py-2.5 text-sm text-white disabled:opacity-50">
+            บันทึก Spreadsheet
+          </button>
+        </div>}
+        {sheetsStatus.data?.configured && <p className="text-xs text-emerald-700">ใช้ Spreadsheet ID จาก Environment Variable: GOOGLE_SPREADSHEET_ID</p>}
+        <p className="text-xs text-stone-500">ระบบจะซิงก์อัตโนมัติทุกครั้งที่เพิ่ม แก้ไข ลบ หรือเปลี่ยนสถานะ และจะลองใหม่เมื่อ Google Sheets ใช้งานไม่ได้</p>
       </div>}
-      {sheetsStatus.data?.configured && <p className="text-xs text-emerald-700">ใช้ Spreadsheet ID จาก Environment Variable: GOOGLE_SPREADSHEET_ID</p>}
-      <p className="text-xs text-stone-500">ระบบจะซิงก์อัตโนมัติทุกครั้งที่เพิ่ม แก้ไข ลบ หรือเปลี่ยนสถานะ และจะลองใหม่เมื่อ Google Sheets ใช้งานไม่ได้</p>
     </section>
     <form onSubmit={submit} className="rounded-2xl border bg-white p-4 sm:p-5 space-y-3">
       <div className="font-semibold">{editing ? "แก้ไขบิล" : "เพิ่มบิลรายเดือน"}</div>
