@@ -62,7 +62,7 @@ export default function InstallmentGoodsManager() {
 
   const utils = trpc.useUtils();
   // List only creditor parties (ร้านค้า / บัตรเครดิต / แพลตฟอร์ม)
-  const partiesQuery = trpc.ledger.listParties.useQuery("creditor");
+  const partiesQuery = trpc.ledger.listProductInstallmentParties.useQuery();
   const partyDetailQuery = trpc.ledger.getParty.useQuery(
     { id: selectedPartyId },
     { enabled: Boolean(selectedPartyId) }
