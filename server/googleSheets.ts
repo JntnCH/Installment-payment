@@ -187,12 +187,8 @@ export async function processMonthlyBillSyncQueue() {
       .where(and(eq(monthlyBillSyncOutbox.status, "pending"), lte(monthlyBillSyncOutbox.nextRetryAt, new Date())))
       .orderBy(asc(monthlyBillSyncOutbox.createdAt)).limit(20);
     for (const job of pending) {
-      const claim = await db.update(monthlyBillSyncOutbox).set({ status: "processing" })
+      await db.update(monthlyBillSyncOutbox).set({ status: "processing" })
         .where(and(eq(monthlyBillSyncOutbox.id, job.id), eq(monthlyBillSyncOutbox.status, "pending")));
-      const affectedRows = Array.isArray(claim)
-        ? Number((claim[0] as { affectedRows?: number })?.affectedRows)
-        : Number((claim as unknown as { affectedRows?: number })?.affectedRows);
-      if (Number.isFinite(affectedRows) && affectedRows === 0) continue;
       try {
         const credentials = await accessToken(job.ownerId);
         await syncBill(credentials.token, credentials.spreadsheetId, job.billId, job.action, job.ownerId);
