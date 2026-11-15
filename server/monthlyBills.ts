@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { monthlyBillSyncOutbox, monthlyBills } from "../drizzle/schema";
 import { getDb } from "./db";
+import { storagePut } from "./storage";
 
 export type MonthlyBillInput = {
   billName: string;
@@ -60,6 +61,37 @@ export async function updateMonthlyBill(ownerId: number, id: string, input: Mont
   });
   const rows = await db.select().from(monthlyBills).where(and(eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, id))).limit(1);
   return rows[0];
+}
+
+export async function uploadMonthlyBillReceipt(ownerId: number, billId: string, fileName: string, mimeType: string, base64: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select({ id: monthlyBills.id }).from(monthlyBills).where(and(
+    eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, billId), isNull(monthlyBills.deletedAt),
+  )).limit(1);
+  if (!rows[0]) throw new Error("ไม่พบบิลรายเดือน");
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "receipt";
+  const data = Buffer.from(base64, "base64");
+  if (!data.length || data.length > 8 * 1024 * 1024) throw new Error("ไฟล์ต้องมีขนาดไม่เกิน 8 MB");
+  const uploaded = await storagePut("monthly-bills/" + ownerId + "/" + billId + "/" + safeName, data, mimeType);
+  return { receiptKey: uploaded.key };
+}
+
+export async function recordMonthlyBillPayment(ownerId: number, input: { id: string; paidAmount: number; paidAt: string; receiptKey?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select().from(monthlyBills).where(and(
+    eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, input.id), isNull(monthlyBills.deletedAt),
+  )).limit(1);
+  if (!rows[0]) throw new Error("ไม่พบบิลรายเดือน");
+  if (input.receiptKey && !input.receiptKey.startsWith("monthly-bills/" + ownerId + "/" + input.id + "/")) throw new Error("ไฟล์หลักฐานไม่ถูกต้อง");
+  await db.transaction(async tx => {
+    await tx.update(monthlyBills).set({ status: "paid", paidAmount: input.paidAmount.toFixed(2), paidAt: new Date(input.paidAt), receiptKey: input.receiptKey ?? null })
+      .where(and(eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, input.id)));
+    await enqueue(tx, ownerId, input.id, "upsert");
+  });
+  const updated = await db.select().from(monthlyBills).where(and(eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, input.id))).limit(1);
+  return updated[0];
 }
 
 export async function deleteMonthlyBill(ownerId: number, id: string) {
