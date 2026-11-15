@@ -46,7 +46,7 @@ export async function saveGoogleRefreshToken(userId: number, refreshToken: strin
       userId,
       refreshTokenEncrypted: encrypt(refreshToken),
       connectedEmail: email ?? null,
-      spreadsheetId: null,
+      spreadsheetId: ENV.googleSpreadsheetId || null,
     });
   }
 }
@@ -60,9 +60,9 @@ export async function getGoogleSheetsStatus(userId: number) {
   }).from(googleSheetsConnections).where(eq(googleSheetsConnections.userId, userId)).limit(1);
   return {
     connected: Boolean(rows[0]),
-    spreadsheetId: rows[0]?.spreadsheetId ?? "",
+    spreadsheetId: rows[0]?.spreadsheetId || ENV.googleSpreadsheetId || "",
     connectedEmail: rows[0]?.connectedEmail ?? null,
-    configured: Boolean(rows[0]?.spreadsheetId),
+    configured: Boolean(rows[0]?.spreadsheetId || ENV.googleSpreadsheetId),
   };
 }
 
@@ -86,7 +86,8 @@ async function accessToken(userId: number) {
     .where(eq(googleSheetsConnections.userId, userId)).limit(1);
   const connection = rows[0];
   if (!connection) throw new Error("ยังไม่ได้เชื่อมต่อ Google Sheets");
-  if (!connection.spreadsheetId) throw new Error("ยังไม่ได้ตั้งค่า Spreadsheet ID");
+  const spreadsheetId = connection.spreadsheetId || ENV.googleSpreadsheetId;
+  if (!spreadsheetId) throw new Error("ยังไม่ได้ตั้งค่า GOOGLE_SPREADSHEET_ID ใน Railway");
   const response = await axios.post("https://oauth2.googleapis.com/token", new URLSearchParams({
     client_id: ENV.googleClientId,
     client_secret: ENV.googleClientSecret,
@@ -98,7 +99,7 @@ async function accessToken(userId: number) {
   });
   const token = response.data?.access_token as string | undefined;
   if (!token) throw new Error("Google ไม่ส่ง access token กลับมา");
-  return { token, spreadsheetId: connection.spreadsheetId };
+  return { token, spreadsheetId };
 }
 
 async function googleRequest<T>(token: string, method: "GET" | "POST" | "PUT", url: string, data?: unknown) {

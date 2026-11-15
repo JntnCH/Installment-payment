@@ -52,12 +52,13 @@ export default function MonthlyBillsManager() {
       <button type="button" onClick={() => window.location.assign("/api/auth/google?intent=link")} className="rounded-lg border px-3 py-2 text-sm">
         {sheetsStatus.data?.connected ? "เชื่อมต่อ Google ใหม่ / อนุญาตสิทธิ์ Sheets" : "เชื่อมต่อ Google Sheets"}
       </button>
-      <div className="flex flex-col sm:flex-row gap-2">
+      {!sheetsStatus.data?.configured && <div className="flex flex-col sm:flex-row gap-2">
         <input value={spreadsheetId} onChange={event => setSpreadsheetId(event.target.value)} className="min-w-0 flex-1 border rounded-lg p-2.5 text-sm" placeholder="วาง Google Spreadsheet ID" />
         <button type="button" disabled={!sheetsStatus.data?.connected || configureSheets.isPending || !spreadsheetId.trim()} onClick={() => configureSheets.mutate({ spreadsheetId })} className="rounded-lg bg-stone-900 px-4 py-2.5 text-sm text-white disabled:opacity-50">
           บันทึก Spreadsheet
         </button>
-      </div>
+      </div>}
+      {sheetsStatus.data?.configured && <p className="text-xs text-emerald-700">ใช้ Spreadsheet ID จาก Environment Variable: GOOGLE_SPREADSHEET_ID</p>}
       <p className="text-xs text-stone-500">ระบบจะซิงก์อัตโนมัติทุกครั้งที่เพิ่ม แก้ไข ลบ หรือเปลี่ยนสถานะ และจะลองใหม่เมื่อ Google Sheets ใช้งานไม่ได้</p>
     </section>
     <form onSubmit={submit} className="rounded-2xl border bg-white p-4 sm:p-5 space-y-3">
