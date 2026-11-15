@@ -62,7 +62,7 @@ export default function InstallmentGoodsManager() {
 
   const utils = trpc.useUtils();
   // List only creditor parties (ร้านค้า / บัตรเครดิต / แพลตฟอร์ม)
-  const partiesQuery = trpc.ledger.listParties.useQuery("creditor");
+  const partiesQuery = trpc.ledger.listProductInstallmentParties.useQuery();
   const partyDetailQuery = trpc.ledger.getParty.useQuery(
     { id: selectedPartyId },
     { enabled: Boolean(selectedPartyId) }
@@ -79,8 +79,8 @@ export default function InstallmentGoodsManager() {
 
   const parties = partiesQuery.data || [];
   const selectedContractData = contractQuery.data;
-  const contract = selectedContractData?.contract;
-  const contractSchedules = (selectedContractData?.transactions || []).filter((t) => t.type === "scheduled");
+  const contract = selectedContractData?.contract?.title?.trim().startsWith("ผ่อน ") ? selectedContractData.contract : undefined;
+  const contractSchedules = contract ? (selectedContractData?.transactions || []).filter((t) => t.type === "scheduled") : [];
 
   // Real-time calculation for Form
   const calcPreview = useMemo(() => {
@@ -354,7 +354,7 @@ export default function InstallmentGoodsManager() {
                       รายการผ่อนของ "{partyDetailQuery.data.party?.displayName}"
                     </h3>
                     <div className="text-xs text-[#78716C]">
-                      มีทั้งหมด {partyDetailQuery.data.contracts.length} สัญญา
+                      มีทั้งหมด {partyDetailQuery.data.contracts.filter((item) => item.title.trim().startsWith("ผ่อน ")).length} สัญญา
                     </div>
                   </div>
                   <Button
@@ -380,7 +380,7 @@ export default function InstallmentGoodsManager() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {partyDetailQuery.data.contracts.map((c) => {
+                    {partyDetailQuery.data.contracts.filter((item) => item.title.trim().startsWith("ผ่อน ")).map((c) => {
                       const isContractActive = selectedContractId === c.contractId;
                       return (
                         <div

@@ -185,6 +185,15 @@ export const appRouter = router({
     callDialogflowService: publicProcedure
       .input(dialogflowServiceSchema)
       .mutation(async ({ input }) => callDialogflowServiceEndpoint(input)),
+    listProductInstallmentParties: protectedProcedure.query(async ({ ctx }) => {
+      const candidates = await listLedgerParties(ctx.user.id, "creditor");
+      const productParties = await Promise.all(candidates.filter(p => !isDemoId(p.partyId)).map(async party => {
+        const ledger = await getPartyLedger(ctx.user.id, party.partyId);
+        const productContracts = (ledger?.contracts ?? []).filter(contract => contract.title.trim().startsWith("ผ่อน "));
+        return productContracts.length ? { ...party, productContractCount: productContracts.length } : null;
+      }));
+      return productParties.filter((party): party is NonNullable<typeof party> => party !== null);
+    }),
     listParties: protectedProcedure
       .input(partyRoleSchema.optional())
       .query(async ({ ctx, input }) => {
