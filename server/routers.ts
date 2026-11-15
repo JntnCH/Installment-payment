@@ -44,7 +44,7 @@ import {
 } from "./sheetsProxy";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { listAuthIdentities } from "./db";
-import { createMonthlyBill, deleteMonthlyBill, listMonthlyBills, updateMonthlyBill } from "./monthlyBills";
+import { createMonthlyBill, deleteMonthlyBill, listMonthlyBills, recordMonthlyBillPayment, updateMonthlyBill, uploadMonthlyBillReceipt } from "./monthlyBills";
 import { configureGoogleSpreadsheet, getGoogleSheetsStatus } from "./googleSheets";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -166,6 +166,14 @@ export const appRouter = router({
     list: protectedProcedure.query(({ ctx }) => listMonthlyBills(ctx.user.id)),
     create: protectedProcedure.input(z.object({ billName: z.string().trim().min(1).max(160), amount: z.number().positive(), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), status: z.enum(["pending", "paid"]).optional(), note: z.string().max(2000).optional() })).mutation(({ ctx, input }) => createMonthlyBill(ctx.user.id, input)),
     update: protectedProcedure.input(z.object({ id: z.string().min(1), billName: z.string().trim().min(1).max(160), amount: z.number().positive(), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), status: z.enum(["pending", "paid"]).optional(), note: z.string().max(2000).optional() })).mutation(({ ctx, input }) => updateMonthlyBill(ctx.user.id, input.id, input)),
+    uploadReceipt: protectedProcedure.input(z.object({
+      billId: z.string().min(1), fileName: z.string().min(1).max(180),
+      mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
+      base64: z.string().min(1).max(11_184_812),
+    })).mutation(({ ctx, input }) => uploadMonthlyBillReceipt(ctx.user.id, input.billId, input.fileName, input.mimeType, input.base64)),
+    recordPayment: protectedProcedure.input(z.object({
+      id: z.string().min(1), paidAmount: z.number().positive(), paidAt: z.string().datetime(), receiptKey: z.string().max(512).optional(),
+    })).mutation(({ ctx, input }) => recordMonthlyBillPayment(ctx.user.id, input)),
     delete: protectedProcedure.input(z.object({ id: z.string().min(1) })).mutation(({ ctx, input }) => deleteMonthlyBill(ctx.user.id, input.id)),
   }),
   ledger: router({
