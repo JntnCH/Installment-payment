@@ -552,7 +552,7 @@ export default function InstallmentGoodsManager() {
                                   type="button"
                                   onClick={() =>
                                     setActivePaySchedule({
-                                      scheduleId: s.transactionId,
+                                      scheduleId: s.transactionId.replace(/^schedule:/, ""),
                                       amount: Number(s.amount),
                                       installmentNo: installmentIndex,
                                       contractTitle: contract.title,
