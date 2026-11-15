@@ -102,3 +102,34 @@ export const ledgerTransactions = mysqlTable("ledger_transactions", {
   contractOccurredIdx: index("ledger_transaction_contract_occurred_idx").on(table.contractId, table.occurredAt),
   partyOccurredIdx: index("ledger_transaction_party_occurred_idx").on(table.partyId, table.occurredAt),
 }));
+
+export const monthlyBills = mysqlTable("monthly_bills", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  billName: varchar("billName", { length: 160 }).notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  dueDate: date("dueDate", { mode: "string" }).notNull(),
+  status: mysqlEnum("status", ["pending", "paid"]).notNull().default("pending"),
+  note: text("note"),
+  deletedAt: timestamp("deletedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({
+  ownerDueIdx: index("monthly_bill_owner_due_idx").on(table.ownerId, table.dueDate),
+  ownerStatusIdx: index("monthly_bill_owner_status_idx").on(table.ownerId, table.status),
+}));
+
+export const monthlyBillSyncOutbox = mysqlTable("monthly_bill_sync_outbox", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  billId: varchar("billId", { length: 64 }).notNull(),
+  action: mysqlEnum("action", ["upsert", "delete"]).notNull(),
+  status: mysqlEnum("status", ["pending", "processing", "done"]).notNull().default("pending"),
+  attempts: int("attempts").notNull().default(0),
+  nextRetryAt: timestamp("nextRetryAt").defaultNow().notNull(),
+  lastError: text("lastError"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => ({
+  ownerStatusRetryIdx: index("monthly_bill_outbox_retry_idx").on(table.status, table.nextRetryAt),
+  billCreatedIdx: index("monthly_bill_outbox_bill_idx").on(table.ownerId, table.billId, table.createdAt),
+}));
