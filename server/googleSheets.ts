@@ -125,7 +125,7 @@ async function ensureBillTab(token: string, spreadsheetId: string) {
   const header = await googleRequest<{ values?: unknown[][] }>(
     token, "GET", `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${headerRange}`,
   );
-  if (!header.values?.length) {
+  if (!header.values?.length || (header.values[0]?.length ?? 0) < HEADERS.length) {
     await googleRequest(token, "PUT",
       `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${headerRange}?valueInputOption=RAW`,
       { values: [HEADERS] },
@@ -165,7 +165,7 @@ async function syncBill(token: string, spreadsheetId: string, billId: string, ac
   ]];
   if (index >= 0) {
     const rowNumber = index + 2;
-    const range = encodeURIComponent(`'${TAB_NAME}'!A${rowNumber}:G${rowNumber}`);
+    const range = encodeURIComponent(`'${TAB_NAME}'!A${rowNumber}:J${rowNumber}`);
     await googleRequest(token, "PUT",
       `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}?valueInputOption=USER_ENTERED`,
       { values },
