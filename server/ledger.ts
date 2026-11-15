@@ -140,6 +140,41 @@ export async function listLedgerParties(ownerId: number, role?: "debtor" | "cred
   return result.map(toParty);
 }
 
+export async function listLedgerPartiesWithContracts(ownerId: number, role?: "debtor" | "creditor") {
+  const partyRows = await listLedgerParties(ownerId, role);
+  if (partyRows.length === 0) return [];
+
+  const db = await getDb();
+  const partyIds = partyRows.map(party => party.partyId);
+  const contractsByParty = new Map<string, string[]>();
+
+  if (db) {
+    const contractRows = await db
+      .select({ partyId: contracts.partyId, title: contracts.title })
+      .from(contracts)
+      .where(and(eq(contracts.ownerId, ownerId), inArray(contracts.partyId, partyIds)));
+
+    for (const contract of contractRows) {
+      const titles = contractsByParty.get(contract.partyId) ?? [];
+      titles.push(contract.title);
+      contractsByParty.set(contract.partyId, titles);
+    }
+  } else {
+    const ownedPartyIds = new Set(partyIds);
+    for (const contract of memoryContracts.values()) {
+      if (contract.ownerId !== ownerId || !ownedPartyIds.has(contract.partyId)) continue;
+      const titles = contractsByParty.get(contract.partyId) ?? [];
+      titles.push(contract.title);
+      contractsByParty.set(contract.partyId, titles);
+    }
+  }
+
+  return partyRows.map(party => ({
+    party,
+    contractTitles: contractsByParty.get(party.partyId) ?? [],
+  }));
+}
+
 export async function getPartyLedger(ownerId: number, partyId: string) {
   const party = await getOwnedParty(ownerId, partyId);
   if (!party) return null;
