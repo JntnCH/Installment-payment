@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -9,6 +9,15 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function MonthlyBillsManager() {
   const utils = trpc.useUtils();
   const billsQuery = trpc.monthlyBills.list.useQuery();
+  const sheetsStatus = trpc.monthlyBills.googleStatus.useQuery();
+  const configureSheets = trpc.monthlyBills.configureGoogleSpreadsheet.useMutation({
+    onSuccess: async () => { await sheetsStatus.refetch(); toast.success("บันทึกการเชื่อมต่อ Google Sheets แล้ว"); },
+    onError: error => toast.error(error.message),
+  });
+  const [spreadsheetId, setSpreadsheetId] = useState("");
+  useEffect(() => {
+    if (sheetsStatus.data?.spreadsheetId) setSpreadsheetId(sheetsStatus.data.spreadsheetId);
+  }, [sheetsStatus.data?.spreadsheetId]);
   const createBill = trpc.monthlyBills.create.useMutation({ onSuccess: async () => { await utils.monthlyBills.list.invalidate(); toast.success("บันทึกบิลแล้ว"); reset(); } });
   const updateBill = trpc.monthlyBills.update.useMutation({ onSuccess: async () => { await utils.monthlyBills.list.invalidate(); toast.success("แก้ไขบิลแล้ว"); reset(); } });
   const deleteBill = trpc.monthlyBills.delete.useMutation({ onSuccess: async () => { await utils.monthlyBills.list.invalidate(); toast.success("ลบบิลแล้ว"); } });
@@ -34,6 +43,23 @@ export default function MonthlyBillsManager() {
       <div><div className="text-xs tracking-widest text-stone-500">MONTHLY BILL TRACKER</div><h1 className="text-2xl font-bold mt-1">บิลรายเดือน</h1><p className="text-sm text-stone-500 mt-1">บันทึกวันครบกำหนดและติดตามยอดที่ต้องชำระ</p></div>
       <div className="rounded-xl bg-white border p-3 min-w-32"><div className="text-xs text-stone-500">ยอดค้างชำระ</div><div className="font-bold text-lg">฿{totalPending.toLocaleString("th-TH")}</div></div>
     </div>
+    <section className="rounded-2xl border bg-white p-4 space-y-3">
+      <div className="font-semibold">Google Sheets Auto Sync</div>
+      <p className="text-sm text-stone-500">
+        {sheetsStatus.data?.connected ? `เชื่อมต่อแล้ว ${sheetsStatus.data.connectedEmail ? "· " + sheetsStatus.data.connectedEmail : ""}` : "ยังไม่ได้อนุญาต Google Sheets"}
+        {sheetsStatus.data?.configured ? " · ตั้งค่า Spreadsheet แล้ว" : " · ยังไม่ได้ตั้งค่า Spreadsheet ID"}
+      </p>
+      <button type="button" onClick={() => window.location.assign("/api/auth/google?intent=link")} className="rounded-lg border px-3 py-2 text-sm">
+        {sheetsStatus.data?.connected ? "เชื่อมต่อ Google ใหม่ / อนุญาตสิทธิ์ Sheets" : "เชื่อมต่อ Google Sheets"}
+      </button>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input value={spreadsheetId} onChange={event => setSpreadsheetId(event.target.value)} className="min-w-0 flex-1 border rounded-lg p-2.5 text-sm" placeholder="วาง Google Spreadsheet ID" />
+        <button type="button" disabled={!sheetsStatus.data?.connected || configureSheets.isPending || !spreadsheetId.trim()} onClick={() => configureSheets.mutate({ spreadsheetId })} className="rounded-lg bg-stone-900 px-4 py-2.5 text-sm text-white disabled:opacity-50">
+          บันทึก Spreadsheet
+        </button>
+      </div>
+      <p className="text-xs text-stone-500">ระบบจะซิงก์อัตโนมัติทุกครั้งที่เพิ่ม แก้ไข ลบ หรือเปลี่ยนสถานะ และจะลองใหม่เมื่อ Google Sheets ใช้งานไม่ได้</p>
+    </section>
     <form onSubmit={submit} className="rounded-2xl border bg-white p-4 sm:p-5 space-y-3">
       <div className="font-semibold">{editing ? "แก้ไขบิล" : "เพิ่มบิลรายเดือน"}</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -54,6 +80,6 @@ export default function MonthlyBillsManager() {
         <div className="flex gap-1"><button onClick={()=>startEdit(bill)} className="p-2 rounded-lg border" aria-label="แก้ไข"><Pencil size={16}/></button><button onClick={()=>{if(confirm("ยืนยันลบบิลนี้?")) deleteBill.mutate({id:bill.id});}} className="p-2 rounded-lg border text-red-600" aria-label="ลบ"><Trash2 size={16}/></button></div>
       </div>)}</div>}
     </section>
-    <p className="text-xs text-stone-500">ข้อมูลบันทึกใน Railway Database และเข้าคิวรอซิงก์ Google Sheets (ระบบซิงก์อัตโนมัติจะทำงานหลังตั้งค่าการเชื่อมต่อ Google)</p>
+    <p className="text-xs text-stone-500">ข้อมูลหลักบันทึกใน Railway Database และระบบจะส่งไปยังแท็บ “บิลรายเดือน” ใน Google Sheets อัตโนมัติ</p>
   </div>;
 }

@@ -9,6 +9,7 @@ export const ENV = {
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? "",
+  googleTokenEncryptionKey: process.env.GOOGLE_TOKEN_ENCRYPTION_KEY ?? "",
   lineChannelId: process.env.LINE_CHANNEL_ID ?? "",
   lineChannelSecret: process.env.LINE_CHANNEL_SECRET ?? "",
   lineRedirectUri: process.env.LINE_REDIRECT_URI ?? "",

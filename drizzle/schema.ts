@@ -133,3 +133,13 @@ export const monthlyBillSyncOutbox = mysqlTable("monthly_bill_sync_outbox", {
   ownerStatusRetryIdx: index("monthly_bill_outbox_retry_idx").on(table.status, table.nextRetryAt),
   billCreatedIdx: index("monthly_bill_outbox_bill_idx").on(table.ownerId, table.billId, table.createdAt),
 }));
+
+
+export const googleSheetsConnections = mysqlTable("google_sheets_connections", {
+  userId: int("userId").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  refreshTokenEncrypted: text("refreshTokenEncrypted").notNull(),
+  spreadsheetId: varchar("spreadsheetId", { length: 255 }),
+  connectedEmail: varchar("connectedEmail", { length: 320 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});

@@ -44,6 +44,7 @@ import {
 import { getSessionCookieOptions } from "./_core/cookies";
 import { listAuthIdentities } from "./db";
 import { createMonthlyBill, deleteMonthlyBill, listMonthlyBills, updateMonthlyBill } from "./monthlyBills";
+import { configureGoogleSpreadsheet, getGoogleSheetsStatus } from "./googleSheets";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
@@ -157,6 +158,10 @@ export const appRouter = router({
       }),
   }),
   monthlyBills: router({
+    googleStatus: protectedProcedure.query(({ ctx }) => getGoogleSheetsStatus(ctx.user.id)),
+    configureGoogleSpreadsheet: protectedProcedure
+      .input(z.object({ spreadsheetId: z.string().trim().min(10).max(255) }))
+      .mutation(({ ctx, input }) => configureGoogleSpreadsheet(ctx.user.id, input.spreadsheetId)),
     list: protectedProcedure.query(({ ctx }) => listMonthlyBills(ctx.user.id)),
     create: protectedProcedure.input(z.object({ billName: z.string().trim().min(1).max(160), amount: z.number().positive(), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), status: z.enum(["pending", "paid"]).optional(), note: z.string().max(2000).optional() })).mutation(({ ctx, input }) => createMonthlyBill(ctx.user.id, input)),
     update: protectedProcedure.input(z.object({ id: z.string().min(1), billName: z.string().trim().min(1).max(160), amount: z.number().positive(), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), status: z.enum(["pending", "paid"]).optional(), note: z.string().max(2000).optional() })).mutation(({ ctx, input }) => updateMonthlyBill(ctx.user.id, input.id, input)),

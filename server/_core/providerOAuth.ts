@@ -7,6 +7,7 @@ import * as db from "../db";
 import { ENV } from "./env";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
+import { saveGoogleRefreshToken } from "../googleSheets";
 
 type Provider = "google" | "line";
 
@@ -36,7 +37,7 @@ function providerConfig(provider: Provider) {
       clientSecret: ENV.googleClientSecret,
       authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
       tokenEndpoint: "https://oauth2.googleapis.com/token",
-      scopes: "openid email profile",
+      scopes: "openid email profile https://www.googleapis.com/auth/spreadsheets",
     };
   }
   return {
@@ -55,7 +56,8 @@ function isConfigured(provider: Provider) {
     config.clientSecret &&
     redirectUri(provider) &&
     ENV.cookieSecret &&
-    ENV.databaseUrl
+    ENV.databaseUrl &&
+    (provider !== "google" || /^[a-f0-9]{64}$/i.test(ENV.googleTokenEncryptionKey))
   );
 }
 
@@ -98,8 +100,9 @@ async function startLogin(provider: Provider, req: Request, res: Response) {
   url.searchParams.set("scope", config.scopes);
   url.searchParams.set("state", state);
   if (provider === "google") {
-    url.searchParams.set("access_type", "online");
-    url.searchParams.set("prompt", "select_account");
+    url.searchParams.set("access_type", "offline");
+    url.searchParams.set("prompt", "consent select_account");
+    url.searchParams.set("include_granted_scopes", "true");
   }
   res.redirect(302, url.toString());
 }
@@ -117,7 +120,7 @@ async function exchangeCode(provider: Provider, code: string) {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     timeout: 15000,
   });
-  return response.data as { access_token?: string; id_token?: string };
+  return response.data as { access_token?: string; id_token?: string; refresh_token?: string };
 }
 
 async function getGoogleProfile(accessToken: string) {
@@ -195,12 +198,18 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
         provider,
         ...profile,
       });
+      if (provider === "google" && tokens.refresh_token) {
+        await saveGoogleRefreshToken(currentUser.id, tokens.refresh_token, profile.email);
+      }
       res.redirect(302, "/?auth=linked");
       return;
     }
 
     const user = await db.getUserByAuthIdentity(provider, profile.providerUserId)
       ?? await db.createUserForAuthIdentity({ provider, ...profile });
+    if (provider === "google" && tokens.refresh_token) {
+      await saveGoogleRefreshToken(user.id, tokens.refresh_token, profile.email);
+    }
 
     await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
 
