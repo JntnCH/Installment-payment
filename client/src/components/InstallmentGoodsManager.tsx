@@ -61,6 +61,14 @@ export default function InstallmentGoodsManager() {
   });
 
   const utils = trpc.useUtils();
+  const refreshProductLedger = (partyId?: string, contractId?: string) => {
+    void Promise.all([
+      utils.ledger.getStats.invalidate(),
+      utils.ledger.listProductInstallmentParties.invalidate(),
+      ...(partyId ? [utils.ledger.getParty.invalidate({ id: partyId })] : []),
+      ...(contractId ? [utils.ledger.getContract.invalidate({ id: contractId })] : []),
+    ]);
+  };
   // List only creditor parties (ร้านค้า / บัตรเครดิต / แพลตฟอร์ม)
   const partiesQuery = trpc.ledger.listProductInstallmentParties.useQuery();
   const partyDetailQuery = trpc.ledger.getParty.useQuery(
@@ -168,7 +176,7 @@ export default function InstallmentGoodsManager() {
         })),
       });
 
-      await utils.ledger.invalidate();
+      refreshProductLedger(partyId, res?.contract?.contractId);
       toast.success(`เพิ่มรายการผ่อน ${form.productName} เรียบร้อยแล้ว!`);
       setCreateModalOpen(false);
       setSelectedPartyId(partyId);
@@ -191,7 +199,7 @@ export default function InstallmentGoodsManager() {
         source: "ledger_debtor_payment",
         note: data.note || `จ่ายค่างวดผ่อนสินค้า ${activePaySchedule.contractTitle} งวดที่ ${activePaySchedule.installmentNo} (จ่ายออก)`,
       });
-      await utils.ledger.invalidate();
+      refreshProductLedger(selectedPartyId, selectedContractId);
       toast.success("บันทึกการจ่ายค่างวดสินค้า (จ่ายออก) เรียบร้อยแล้ว");
       setActivePaySchedule(null);
     } catch (err: any) {
@@ -427,12 +435,13 @@ export default function InstallmentGoodsManager() {
                     <Button
                       variant="danger"
                       size="sm"
+                      loading={deleteContractMutation.isPending}
                       icon={<Trash2 className="w-3.5 h-3.5" />}
                       onClick={async () => {
                         if (!confirm(`คุณต้องการลบสัญญาผ่อนสินค้านี้ใช่หรือไม่?`)) return;
                         try {
                           await deleteContractMutation.mutateAsync({ id: contract.contractId });
-                          await utils.ledger.invalidate();
+                          refreshProductLedger(selectedPartyId, contract.contractId);
                           toast.success("ลบสัญญาผ่อนสินค้าเรียบร้อยแล้ว");
                           setSelectedContractId("");
                         } catch (err: any) {
@@ -947,6 +956,7 @@ export default function InstallmentGoodsManager() {
                   variant="primary"
                   size="md"
                   className="flex-1"
+                  loading={createContractMutation.isPending || createPartyMutation.isPending}
                   icon={<CheckCircle2 className="w-4 h-4" />}
                 >
                   บันทึกสัญญาผ่อนสินค้า
