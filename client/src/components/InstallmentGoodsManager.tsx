@@ -67,7 +67,7 @@ export default function InstallmentGoodsManager() {
       utils.ledger.listProductInstallmentParties.invalidate(),
       ...(partyId ? [utils.ledger.getParty.invalidate({ id: partyId })] : []),
       ...(contractId ? [utils.ledger.getContract.invalidate({ id: contractId })] : []),
-    ]);
+    ]).catch(() => undefined);
   };
   // List only creditor parties (ร้านค้า / บัตรเครดิต / แพลตฟอร์ม)
   const partiesQuery = trpc.ledger.listProductInstallmentParties.useQuery();
@@ -441,7 +441,7 @@ export default function InstallmentGoodsManager() {
                         if (!confirm(`คุณต้องการลบสัญญาผ่อนสินค้านี้ใช่หรือไม่?`)) return;
                         try {
                           await deleteContractMutation.mutateAsync({ id: contract.contractId });
-                          refreshProductLedger(selectedPartyId, contract.contractId);
+                          refreshProductLedger(selectedPartyId);
                           toast.success("ลบสัญญาผ่อนสินค้าเรียบร้อยแล้ว");
                           setSelectedContractId("");
                         } catch (err: any) {
