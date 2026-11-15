@@ -33,6 +33,33 @@ interface DashboardOverviewProps {
   onOpenContract?: (partyId: string, contractId: string) => void;
 }
 
+function formatOverdueDuration(dueDate: string, totalDays: number): string {
+  const [year, month, day] = dueDate.split("-").map(Number);
+  const today = new Date();
+  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const anniversary = (monthOffset: number) => {
+    const absoluteMonth = month - 1 + monthOffset;
+    const targetYear = year + Math.floor(absoluteMonth / 12);
+    const targetMonth = ((absoluteMonth % 12) + 12) % 12;
+    const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+    return new Date(targetYear, targetMonth, Math.min(day, lastDay));
+  };
+
+  let months = (todayDate.getFullYear() - year) * 12 + todayDate.getMonth() + 1 - month;
+  let anchorDate = anniversary(months);
+  if (anchorDate > todayDate) {
+    months -= 1;
+    anchorDate = anniversary(months);
+  }
+
+  if (months <= 0) return `เกิน ${totalDays} วัน`;
+  const remainingDays = Math.max(0, Math.round((todayDate.getTime() - anchorDate.getTime()) / 86_400_000));
+  return remainingDays > 0
+    ? `เกิน ${months} เดือน ${remainingDays} วัน (${totalDays} วัน)`
+    : `เกิน ${months} เดือน (${totalDays} วัน)`;
+}
+
 export default function DashboardOverview({
   onNavigate,
   onOpenContract,
@@ -261,7 +288,7 @@ export default function DashboardOverview({
                 status={item.status}
                 statusLabel={
                   item.status === "overdue"
-                    ? `เกินกำหนด ${Math.abs(item.daysDiff)} วัน`
+                    ? formatOverdueDuration(item.dueDate, Math.abs(item.daysDiff))
                     : item.status === "today"
                     ? "ครบกำหนดวันนี้"
                     : `อีก ${item.daysDiff} วัน`

@@ -149,7 +149,7 @@ export default function IndividualLedger({
 
   const utils = trpc.useUtils();
 
-  const partyListQuery = trpc.ledger.listParties.useQuery(role);
+  const partyListQuery = trpc.ledger.listDebtContractParties.useQuery(role);
   const partyQuery = trpc.ledger.getParty.useQuery(
     { id: selectedPartyId },
     { enabled: Boolean(selectedPartyId) }
