@@ -154,7 +154,7 @@ export default function IndividualLedger({
       utils.ledger.listDebtContractParties.invalidate(role),
       ...(partyId ? [utils.ledger.getParty.invalidate({ id: partyId })] : []),
       ...(contractId ? [utils.ledger.getContract.invalidate({ id: contractId })] : []),
-    ]);
+    ]).catch(() => undefined);
   };
 
   const partyListQuery = trpc.ledger.listDebtContractParties.useQuery(role);
@@ -427,7 +427,7 @@ export default function IndividualLedger({
 
     try {
       await deletePartyMutation.mutateAsync({ id: selectedPartyId });
-      refreshLedger(selectedPartyId);
+      refreshLedger();
       toast.success(`ลบรายชื่อ ${selectedParty.displayName} เรียบร้อยแล้ว`);
       setSelectedPartyId("");
       setSelectedContractId("");
@@ -443,7 +443,7 @@ export default function IndividualLedger({
 
     try {
       await deleteContractMutation.mutateAsync({ id: selectedContractId });
-      refreshLedger(selectedPartyId, selectedContractId);
+      refreshLedger(selectedPartyId);
       toast.success(`ลบสัญญาเรียบร้อยแล้ว`);
       setSelectedContractId("");
     } catch (err: any) {
