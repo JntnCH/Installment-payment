@@ -7,7 +7,7 @@ import { ENV } from "./_core/env";
 
 const GOOGLE_API = "https://sheets.googleapis.com/v4";
 const TAB_NAME = "บิลรายเดือน";
-const HEADERS = ["Bill ID", "ชื่อบิล", "จำนวนเงิน", "วันครบกำหนด", "สถานะ", "หมายเหตุ", "แก้ไขล่าสุด"];
+const HEADERS = ["Bill ID", "ชื่อบิล", "จำนวนเงิน", "วันครบกำหนด", "สถานะ", "หมายเหตุ", "แก้ไขล่าสุด", "วันที่ชำระ", "ยอดที่ชำระจริง", "หลักฐานการชำระ"];
 
 function encryptionKey(): Buffer {
   const value = ENV.googleTokenEncryptionKey;
@@ -121,7 +121,7 @@ async function ensureBillTab(token: string, spreadsheetId: string) {
       requests: [{ addSheet: { properties: { title: TAB_NAME } } }],
     });
   }
-  const headerRange = encodeURIComponent(`'${TAB_NAME}'!A1:G1`);
+  const headerRange = encodeURIComponent(`'${TAB_NAME}'!A1:J1`);
   const header = await googleRequest<{ values?: unknown[][] }>(
     token, "GET", `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${headerRange}`,
   );
@@ -149,7 +149,7 @@ async function syncBill(token: string, spreadsheetId: string, billId: string, ac
   if (action === "delete" || !bill || bill.deletedAt) {
     if (index >= 0) {
       const rowNumber = index + 2;
-      const range = encodeURIComponent(`'${TAB_NAME}'!A${rowNumber}:G${rowNumber}`);
+      const range = encodeURIComponent(`'${TAB_NAME}'!A${rowNumber}:J${rowNumber}`);
       await googleRequest(token, "POST",
         `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}:clear`, {},
       );
@@ -159,7 +159,9 @@ async function syncBill(token: string, spreadsheetId: string, billId: string, ac
   const values = [[
     bill.id, bill.billName, Number(bill.amount), bill.dueDate,
     bill.status === "paid" ? "ชำระแล้ว" : "รอชำระ", bill.note ?? "",
-    bill.updatedAt.toISOString(),
+    bill.updatedAt.toISOString(), bill.paidAt?.toISOString() ?? "",
+    bill.paidAmount ? Number(bill.paidAmount) : "",
+    bill.receiptKey ? "/manus-storage/" + bill.receiptKey : "",
   ]];
   if (index >= 0) {
     const rowNumber = index + 2;
@@ -169,7 +171,7 @@ async function syncBill(token: string, spreadsheetId: string, billId: string, ac
       { values },
     );
   } else {
-    const range = encodeURIComponent(`'${TAB_NAME}'!A:G`);
+    const range = encodeURIComponent(`'${TAB_NAME}'!A:J`);
     await googleRequest(token, "POST",
       `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
       { values },
