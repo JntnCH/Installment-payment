@@ -148,6 +148,14 @@ export default function IndividualLedger({
   } | null>(null);
 
   const utils = trpc.useUtils();
+  const refreshLedger = (partyId?: string, contractId?: string) => {
+    void Promise.all([
+      utils.ledger.getStats.invalidate(),
+      utils.ledger.listDebtContractParties.invalidate(role),
+      ...(partyId ? [utils.ledger.getParty.invalidate({ id: partyId })] : []),
+      ...(contractId ? [utils.ledger.getContract.invalidate({ id: contractId })] : []),
+    ]).catch(() => undefined);
+  };
 
   const partyListQuery = trpc.ledger.listDebtContractParties.useQuery(role);
   const partyQuery = trpc.ledger.getParty.useQuery(
@@ -303,7 +311,7 @@ export default function IndividualLedger({
         note: editPartyForm.note.trim(),
         role: editPartyForm.role,
       });
-      await utils.ledger.invalidate();
+      refreshLedger(editPartyForm.id);
       toast.success("แก้ไขข้อมูลคู่สัญญาเรียบร้อยแล้ว");
       setEditPartyModalOpen(false);
     } catch (err: any) {
@@ -343,7 +351,7 @@ export default function IndividualLedger({
         startDate: editContractForm.startDate,
         status: editContractForm.status,
       });
-      await utils.ledger.invalidate();
+      refreshLedger(selectedPartyId, editContractForm.id);
       toast.success("บันทึกการแก้ไขสัญญาเรียบร้อยแล้ว");
       setEditContractModalOpen(false);
     } catch (err: any) {
@@ -380,7 +388,7 @@ export default function IndividualLedger({
         amount: amt,
         note: editScheduleForm.note.trim() || undefined,
       });
-      await utils.ledger.invalidate();
+      refreshLedger(selectedPartyId, selectedContractId);
       toast.success("แก้ไขข้อมูลงวดชำระเรียบร้อยแล้ว");
       setEditScheduleModalOpen(false);
     } catch (err: any) {
@@ -400,7 +408,7 @@ export default function IndividualLedger({
         phone: partyForm.phone.trim(),
         note: partyForm.note.trim(),
       });
-      await utils.ledger.invalidate();
+      refreshLedger(res?.partyId);
       toast.success(`เพิ่ม${role === "debtor" ? "ลูกหนี้" : "เจ้าหนี้"}สำเร็จ`);
       setPartyModalOpen(false);
       setPartyForm({ displayName: "", phone: "", note: "", role });
@@ -419,7 +427,7 @@ export default function IndividualLedger({
 
     try {
       await deletePartyMutation.mutateAsync({ id: selectedPartyId });
-      await utils.ledger.invalidate();
+      refreshLedger();
       toast.success(`ลบรายชื่อ ${selectedParty.displayName} เรียบร้อยแล้ว`);
       setSelectedPartyId("");
       setSelectedContractId("");
@@ -435,7 +443,7 @@ export default function IndividualLedger({
 
     try {
       await deleteContractMutation.mutateAsync({ id: selectedContractId });
-      await utils.ledger.invalidate();
+      refreshLedger(selectedPartyId);
       toast.success(`ลบสัญญาเรียบร้อยแล้ว`);
       setSelectedContractId("");
     } catch (err: any) {
@@ -487,7 +495,7 @@ export default function IndividualLedger({
         status: "active",
         schedules: generatedSchedules,
       });
-      await utils.ledger.invalidate();
+      refreshLedger(selectedPartyId, res?.contract?.contractId);
       toast.success("สร้างสัญญาและตารางงวดสำเร็จ");
       setContractModalOpen(false);
       setContractForm({
@@ -522,7 +530,7 @@ export default function IndividualLedger({
         source: isDebtor ? "ledger_creditor_collection" : "ledger_debtor_payment",
         note: data.note || (isDebtor ? `รับชำระงวดที่ ${activePaySchedule.installmentNo} (รับเข้า)` : `จ่ายชำระเงินกู้ยืมงวดที่ ${activePaySchedule.installmentNo} (จ่ายออก)`),
       });
-      await utils.ledger.invalidate();
+      refreshLedger(selectedPartyId, selectedContractId);
       toast.success(isDebtor ? "บันทึกการรับชำระเงินคืน (รับเข้า) สำเร็จ" : "บันทึกการจ่ายเงินกู้ยืม (จ่ายออก) สำเร็จ");
       setActivePaySchedule(null);
     } catch (err: any) {
@@ -786,6 +794,7 @@ export default function IndividualLedger({
                         variant="ghost"
                         size="sm"
                         icon={<Trash2 className="w-3.5 h-3.5 text-[#DC2626]" />}
+                        loading={deletePartyMutation.isPending}
                         onClick={handleDeleteParty}
                       >
                         ลบ
@@ -890,6 +899,7 @@ export default function IndividualLedger({
                             variant="ghost"
                             size="sm"
                             icon={<Trash2 className="w-3.5 h-3.5 text-[#DC2626]" />}
+                            loading={deleteContractMutation.isPending}
                             onClick={handleDeleteContract}
                           >
                             ลบสัญญา
@@ -1126,7 +1136,7 @@ export default function IndividualLedger({
                 >
                   ยกเลิก
                 </Button>
-                <Button type="submit" variant="primary" fullWidth>
+                <Button type="submit" variant="primary" fullWidth loading={createPartyMutation.isPending}>
                   บันทึก
                 </Button>
               </div>
@@ -1215,7 +1225,7 @@ export default function IndividualLedger({
                 >
                   ยกเลิก
                 </Button>
-                <Button type="submit" variant="primary" fullWidth>
+                <Button type="submit" variant="primary" fullWidth loading={updatePartyMutation.isPending}>
                   บันทึกการแก้ไข
                 </Button>
               </div>
@@ -1389,7 +1399,7 @@ export default function IndividualLedger({
                 >
                   ยกเลิก
                 </Button>
-                <Button type="submit" variant="primary" fullWidth>
+                <Button type="submit" variant="primary" fullWidth loading={createContractMutation.isPending}>
                   สร้างสัญญาและตารางงวด
                 </Button>
               </div>
@@ -1501,7 +1511,7 @@ export default function IndividualLedger({
                 >
                   ยกเลิก
                 </Button>
-                <Button type="submit" variant="primary" fullWidth>
+                <Button type="submit" variant="primary" fullWidth loading={updateContractMutation.isPending}>
                   บันทึกการแก้ไขสัญญา
                 </Button>
               </div>
@@ -1578,7 +1588,7 @@ export default function IndividualLedger({
                 >
                   ยกเลิก
                 </Button>
-                <Button type="submit" variant="primary" fullWidth>
+                <Button type="submit" variant="primary" fullWidth loading={updateScheduleMutation.isPending}>
                   บันทึกงวด
                 </Button>
               </div>

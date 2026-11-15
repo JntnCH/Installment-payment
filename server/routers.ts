@@ -28,6 +28,7 @@ import {
   getDashboardStats,
   getPartyLedger,
   listLedgerParties,
+  listLedgerPartiesWithContracts,
   markSchedulePaid,
   syncToGoogleSheetsWebhook,
   updateLedgerContract,
@@ -198,28 +199,24 @@ export const appRouter = router({
       .input(dialogflowServiceSchema)
       .mutation(async ({ input }) => callDialogflowServiceEndpoint(input)),
     listProductInstallmentParties: protectedProcedure.query(async ({ ctx }) => {
-      const candidates = await listLedgerParties(ctx.user.id, "creditor");
-      const productParties = await Promise.all(candidates.filter(p => !isDemoId(p.partyId)).map(async party => {
-        const ledger = await getPartyLedger(ctx.user.id, party.partyId);
-        const productContracts = (ledger?.contracts ?? []).filter(contract => contract.title.trim().startsWith("ผ่อน "));
-        return productContracts.length ? { ...party, productContractCount: productContracts.length } : null;
-      }));
-      return productParties.filter((party): party is NonNullable<typeof party> => party !== null);
+      const entries = await listLedgerPartiesWithContracts(ctx.user.id, "creditor");
+      return entries
+        .filter(({ party, contractTitles }) => !isDemoId(party.partyId) && contractTitles.some(title => title.trim().startsWith("ผ่อน ")))
+        .map(({ party, contractTitles }) => ({
+          ...party,
+          productContractCount: contractTitles.filter(title => title.trim().startsWith("ผ่อน ")).length,
+        }));
     }),
     listDebtContractParties: protectedProcedure
       .input(partyRoleSchema.optional())
       .query(async ({ ctx, input }) => {
-        const candidates = await listLedgerParties(ctx.user.id, input);
-        const visibleParties = await Promise.all((candidates || [])
-          .filter(p => !isDemoId(p.partyId))
-          .map(async party => {
-            const ledger = await getPartyLedger(ctx.user.id, party.partyId);
-            const contracts = ledger?.contracts ?? [];
-            const hasNonProductContract = contracts.some(contract => !contract.title.trim().startsWith("ผ่อน "));
-            const isProductOnlyParty = contracts.length > 0 && !hasNonProductContract;
-            return isProductOnlyParty ? null : party;
-          }));
-        return visibleParties.filter((party): party is NonNullable<typeof party> => party !== null);
+        const entries = await listLedgerPartiesWithContracts(ctx.user.id, input);
+        return entries
+          .filter(({ party, contractTitles }) =>
+            !isDemoId(party.partyId) &&
+            (contractTitles.length === 0 || contractTitles.some(title => !title.trim().startsWith("ผ่อน ")))
+          )
+          .map(({ party }) => party);
       }),
     listParties: protectedProcedure
       .input(partyRoleSchema.optional())
