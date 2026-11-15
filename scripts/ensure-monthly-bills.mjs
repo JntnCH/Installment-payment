@@ -49,8 +49,16 @@ const createStatements = [
   ) ENGINE=InnoDB`,
 ];
 
+const additiveColumns = {
+  monthly_bills: {
+    paidAt: "timestamp NULL",
+    paidAmount: "decimal(15,2) NULL",
+    receiptKey: "varchar(512) NULL",
+  },
+};
+
 const expectedColumns = {
-  monthly_bills: ["id", "ownerId", "billName", "amount", "dueDate", "status", "note", "deletedAt", "createdAt", "updatedAt"],
+  monthly_bills: ["id", "ownerId", "billName", "amount", "dueDate", "status", "note", "deletedAt", "createdAt", "updatedAt", "paidAt", "paidAmount", "receiptKey"],
   monthly_bill_sync_outbox: ["id", "ownerId", "billId", "action", "status", "attempts", "nextRetryAt", "lastError", "createdAt"],
   google_sheets_connections: ["userId", "refreshTokenEncrypted", "spreadsheetId", "connectedEmail", "createdAt", "updatedAt"],
 };
@@ -74,6 +82,13 @@ try {
       [databaseName, tableName]
     );
     const actual = new Set(columns.map(column => column.COLUMN_NAME));
+    for (const [columnName, definition] of Object.entries(additiveColumns[tableName] ?? {})) {
+      if (!actual.has(columnName)) {
+        await connection.query(`ALTER TABLE \`${tableName}\` ADD COLUMN \`${columnName}\` ${definition}`);
+        actual.add(columnName);
+        console.log(`[Monthly Bills Migration] Added ${tableName}.${columnName}`);
+      }
+    }
     const missing = required.filter(column => !actual.has(column));
     if (missing.length) {
       throw new Error(`[Monthly Bills Migration] ${tableName} has an incompatible schema; missing: ${missing.join(", ")}. No existing data was changed.`);
