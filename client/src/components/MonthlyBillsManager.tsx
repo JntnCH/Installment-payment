@@ -54,6 +54,6 @@ export default function MonthlyBillsManager() {
         <div className="flex gap-1"><button onClick={()=>startEdit(bill)} className="p-2 rounded-lg border" aria-label="แก้ไข"><Pencil size={16}/></button><button onClick={()=>{if(confirm("ยืนยันลบบิลนี้?")) deleteBill.mutate({id:bill.id});}} className="p-2 rounded-lg border text-red-600" aria-label="ลบ"><Trash2 size={16}/></button></div>
       </div>)}</div>}
     </section>
-    <p className="text-xs text-stone-500">บันทึกข้อมูลลง Railway Database และเข้าคิวสำหรับซิงก์ Google Sheets อัตโนมัติ</p>
+    <p className="text-xs text-stone-500">ข้อมูลบันทึกใน Railway Database และเข้าคิวรอซิงก์ Google Sheets (ระบบซิงก์อัตโนมัติจะทำงานหลังตั้งค่าการเชื่อมต่อ Google)</p>
   </div>;
 }

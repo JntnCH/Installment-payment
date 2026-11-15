@@ -15,6 +15,13 @@
       "when": 1794596400000,
       "tag": "0001_linked_auth_identities",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794700800000,
+      "tag": "0002_monthly_bills",
+      "breakpoints": true
     }
   ]
 }

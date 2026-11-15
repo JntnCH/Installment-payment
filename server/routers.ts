@@ -158,8 +158,8 @@ export const appRouter = router({
   }),
   monthlyBills: router({
     list: protectedProcedure.query(({ ctx }) => listMonthlyBills(ctx.user.id)),
-    create: protectedProcedure.input(z.object({ billName: z.string().trim().min(1).max(160), amount: z.number().positive(), dueDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/), status: z.enum(["pending", "paid"]).optional(), note: z.string().max(2000).optional() })).mutation(({ ctx, input }) => createMonthlyBill(ctx.user.id, input)),
-    update: protectedProcedure.input(z.object({ id: z.string().min(1), billName: z.string().trim().min(1).max(160), amount: z.number().positive(), dueDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/), status: z.enum(["pending", "paid"]).optional(), note: z.string().max(2000).optional() })).mutation(({ ctx, input }) => updateMonthlyBill(ctx.user.id, input.id, input)),
+    create: protectedProcedure.input(z.object({ billName: z.string().trim().min(1).max(160), amount: z.number().positive(), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), status: z.enum(["pending", "paid"]).optional(), note: z.string().max(2000).optional() })).mutation(({ ctx, input }) => createMonthlyBill(ctx.user.id, input)),
+    update: protectedProcedure.input(z.object({ id: z.string().min(1), billName: z.string().trim().min(1).max(160), amount: z.number().positive(), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), status: z.enum(["pending", "paid"]).optional(), note: z.string().max(2000).optional() })).mutation(({ ctx, input }) => updateMonthlyBill(ctx.user.id, input.id, input)),
     delete: protectedProcedure.input(z.object({ id: z.string().min(1) })).mutation(({ ctx, input }) => deleteMonthlyBill(ctx.user.id, input.id)),
   }),
   ledger: router({
