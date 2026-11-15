@@ -206,6 +206,21 @@ export const appRouter = router({
       }));
       return productParties.filter((party): party is NonNullable<typeof party> => party !== null);
     }),
+    listDebtContractParties: protectedProcedure
+      .input(partyRoleSchema.optional())
+      .query(async ({ ctx, input }) => {
+        const candidates = await listLedgerParties(ctx.user.id, input);
+        const visibleParties = await Promise.all((candidates || [])
+          .filter(p => !isDemoId(p.partyId))
+          .map(async party => {
+            const ledger = await getPartyLedger(ctx.user.id, party.partyId);
+            const contracts = ledger?.contracts ?? [];
+            const hasNonProductContract = contracts.some(contract => !contract.title.trim().startsWith("ผ่อน "));
+            const isProductOnlyParty = contracts.length > 0 && !hasNonProductContract;
+            return isProductOnlyParty ? null : party;
+          }));
+        return visibleParties.filter((party): party is NonNullable<typeof party> => party !== null);
+      }),
     listParties: protectedProcedure
       .input(partyRoleSchema.optional())
       .query(async ({ ctx, input }) => {
