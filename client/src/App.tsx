@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -63,7 +63,7 @@ function LoginScreen() {
   );
 }
 
-function TelegramGoogleHandoffGate({ children }: { children: React.ReactNode }) {
+function TelegramGoogleHandoffGate({ children }: { children: ReactNode }) {
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState("");
 
