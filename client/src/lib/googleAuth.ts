@@ -1,7 +1,8 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   getAuth,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
   User,
@@ -26,12 +27,36 @@ GOOGLE_WORKSPACE_SCOPES.forEach((scope) => {
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
+let redirectResultError: unknown = null;
+
+// Resolve Firebase's redirect response once after the browser returns from Google.
+// The shared promise ensures auth listeners wait until the access token is restored.
+const redirectResultPromise = getRedirectResult(auth)
+  .then((result) => {
+    if (!result) return;
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (!credential?.accessToken) {
+      throw new Error("ไม่ได้รับ Access Token จากการเข้าสู่ระบบ Google");
+    }
+    cachedAccessToken = credential.accessToken;
+  })
+  .catch((error: unknown) => {
+    redirectResultError = error;
+    console.error("Google redirect sign-in error:", error);
+  });
 
 export const initAuth = (
   onAuthSuccess?: (user: User, token: string) => void,
   onAuthFailure?: () => void
 ) => {
   return onAuthStateChanged(auth, async (user: User | null) => {
+    await redirectResultPromise;
+
+    if (redirectResultError) {
+      if (onAuthFailure) onAuthFailure();
+      return;
+    }
+
     if (user) {
       if (cachedAccessToken) {
         if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
@@ -52,14 +77,10 @@ export const googleSignIn = async (): Promise<{
 } | null> => {
   try {
     isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error("ไม่ได้รับ Access Token จากการเข้าสู่ระบบ Google");
-    }
-
-    cachedAccessToken = credential.accessToken;
-    return { user: result.user, accessToken: cachedAccessToken };
+    // Redirect works in browsers that block OAuth popups, including mobile webviews.
+    // The access token is restored by getRedirectResult() after returning from Google.
+    await signInWithRedirect(auth, provider);
+    return null;
   } catch (error: any) {
     console.error("Sign in error:", error);
     throw error;
