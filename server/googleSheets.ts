@@ -182,7 +182,7 @@ async function syncBill(token: string, spreadsheetId: string, billId: string, ac
     bill.status === "paid" ? "ชำระแล้ว" : "รอชำระ", bill.note ?? "",
     bill.updatedAt.toISOString(), bill.paidAt?.toISOString() ?? "",
     bill.paidAmount ? Number(bill.paidAmount) : "",
-    bill.receiptKey ? "/manus-storage/" + bill.receiptKey : "",
+    bill.receiptKey ? "https://drive.google.com/open?id=" + encodeURIComponent(bill.receiptKey) : "",
   ]];
   if (index >= 0) {
     const rowNumber = index + 2;
