@@ -28,7 +28,6 @@ import {
   Info,
 } from "lucide-react";
 import { toast } from "sonner";
-import { User } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
 import {
   initAuth,
@@ -41,6 +40,7 @@ import {
   parseDialogflowSheetRows,
   DialogflowSheetRow,
   GoogleDriveFile,
+  GoogleWorkspaceUser,
 } from "@/lib/googleAuth";
 import {
   PageHeader,
@@ -51,7 +51,7 @@ import {
 
 export default function DialogflowSheetViewer() {
   // Google Auth State
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<GoogleWorkspaceUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -221,6 +221,8 @@ export default function DialogflowSheetViewer() {
         setAccessToken(res.accessToken);
         toast.success(`เข้าสู่ระบบ Google สำเร็จ (${res.user.displayName || res.user.email})`);
         fetchSpreadsheets(res.accessToken);
+      } else {
+        toast.info("เปิด Safari เพื่อเข้าสู่ระบบ Google แล้วกลับเข้า Telegram เพื่อใช้งานต่อ");
       }
     } catch (err: any) {
       toast.error(`เข้าสู่ระบบ Google ไม่สำเร็จ: ${err.message}`);
