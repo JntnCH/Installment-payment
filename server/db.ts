@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { authIdentities, InsertUser, users, type AuthIdentity } from "../drizzle/schema";
+import { authHandoffs, authIdentities, InsertUser, users, type AuthIdentity, type AuthHandoffPurpose } from "../drizzle/schema";
 import { createHash } from "node:crypto";
 import { ENV } from './_core/env';
 
@@ -188,6 +188,48 @@ export async function linkAuthIdentity(input: {
     )).limit(1);
     if (!linked[0]) throw new Error("Failed to link provider identity");
     return linked[0];
+  });
+}
+
+export async function createAuthHandoff(input: {
+  codeHash: string;
+  userId: number;
+  purpose: AuthHandoffPurpose;
+  expiresAt: Date;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.insert(authHandoffs).values(input);
+}
+
+export async function consumeAuthHandoff(
+  codeHash: string,
+  purpose: AuthHandoffPurpose,
+  expectedUserId?: number,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+
+  return db.transaction(async tx => {
+    const conditions = [
+      eq(authHandoffs.codeHash, codeHash),
+      eq(authHandoffs.purpose, purpose),
+      gt(authHandoffs.expiresAt, new Date()),
+      isNull(authHandoffs.consumedAt),
+      ...(expectedUserId === undefined ? [] : [eq(authHandoffs.userId, expectedUserId)]),
+    ];
+    const rows = await tx.select().from(authHandoffs)
+      .where(and(...conditions)).limit(1).for("update");
+    const handoff = rows[0];
+    if (!handoff) throw new Error("รหัสส่งต่อไม่ถูกต้อง หมดอายุ หรือถูกใช้งานแล้ว");
+
+    await tx.update(authHandoffs)
+      .set({ consumedAt: new Date() })
+      .where(and(
+        eq(authHandoffs.codeHash, codeHash),
+        isNull(authHandoffs.consumedAt),
+      ));
+    return handoff.userId;
   });
 }
 
