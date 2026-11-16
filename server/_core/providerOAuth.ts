@@ -312,6 +312,7 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
 }
 
 async function googleAccessToken(req: Request, res: Response) {
+  res.set("Cache-Control", "no-store, private");
   try {
     const user = await sdk.authenticateRequest(req);
     const status = await getGoogleSheetsStatus(user.id);
@@ -320,13 +321,14 @@ async function googleAccessToken(req: Request, res: Response) {
       return;
     }
     const accessToken = await getGoogleDriveAccessToken(user.id);
-    res.set("Cache-Control", "no-store, private");
+    const identities = await db.listAuthIdentities(user.id);
+    const googleIdentity = identities.find(identity => identity.provider === "google");
     res.status(200).json({
       connected: true,
       accessToken,
       user: {
         id: user.id,
-        displayName: user.name || status.connectedEmail || "Google User",
+        displayName: googleIdentity?.displayName || status.connectedEmail || user.name || "Google User",
         email: status.connectedEmail,
       },
     });
