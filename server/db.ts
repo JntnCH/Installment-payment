@@ -193,7 +193,8 @@ export async function linkAuthIdentity(input: {
 
 export async function createAuthHandoff(input: {
   codeHash: string;
-  userId: number;
+  userId: number | null;
+  telegramProviderUserId: string;
   purpose: AuthHandoffPurpose;
   expiresAt: Date;
 }) {
@@ -205,8 +206,8 @@ export async function createAuthHandoff(input: {
 export async function consumeAuthHandoff(
   codeHash: string,
   purpose: AuthHandoffPurpose,
-  expectedUserId?: number,
-): Promise<number> {
+  expectedTelegramProviderUserId?: string,
+): Promise<{ userId: number | null; telegramProviderUserId: string }> {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
 
@@ -216,7 +217,7 @@ export async function consumeAuthHandoff(
       eq(authHandoffs.purpose, purpose),
       gt(authHandoffs.expiresAt, new Date()),
       isNull(authHandoffs.consumedAt),
-      ...(expectedUserId === undefined ? [] : [eq(authHandoffs.userId, expectedUserId)]),
+      ...(expectedTelegramProviderUserId === undefined ? [] : [eq(authHandoffs.telegramProviderUserId, expectedTelegramProviderUserId)]),
     ];
     const rows = await tx.select().from(authHandoffs)
       .where(and(...conditions)).limit(1).for("update");
@@ -229,7 +230,7 @@ export async function consumeAuthHandoff(
         eq(authHandoffs.codeHash, codeHash),
         isNull(authHandoffs.consumedAt),
       ));
-    return handoff.userId;
+    return { userId: handoff.userId, telegramProviderUserId: handoff.telegramProviderUserId };
   });
 }
 
