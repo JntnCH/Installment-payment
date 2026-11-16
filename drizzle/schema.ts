@@ -35,13 +35,15 @@ export type InsertAuthIdentity = typeof authIdentities.$inferInsert;
 
 export const authHandoffs = mysqlTable("auth_handoffs", {
   codeHash: varchar("codeHash", { length: 64 }).primaryKey(),
-  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: int("userId").references(() => users.id, { onDelete: "cascade" }),
+  telegramProviderUserId: varchar("telegramProviderUserId", { length: 255 }).notNull(),
   purpose: mysqlEnum("purpose", ["google_oauth", "telegram_return"]).notNull(),
   expiresAt: timestamp("expiresAt").notNull(),
   consumedAt: timestamp("consumedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => ({
   userIdx: index("auth_handoff_user_idx").on(table.userId),
+  telegramUserIdx: index("auth_handoff_telegram_user_idx").on(table.telegramProviderUserId),
   expiryIdx: index("auth_handoff_expiry_idx").on(table.purpose, table.expiresAt),
 }));
 
