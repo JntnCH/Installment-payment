@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import * as db from "../db";
@@ -13,7 +13,7 @@ type TelegramUser = {
   username?: string;
 };
 
-function verifyTelegramInitData(initData: string) {
+export function verifyTelegramInitData(initData: string) {
   if (!ENV.telegramBotToken) throw new Error("Telegram Mini App is not configured");
   if (!initData || initData.length > 16_384) throw new Error("Invalid Telegram initData");
 
@@ -91,6 +91,92 @@ async function authenticateTelegram(req: Request, res: Response) {
   }
 }
 
+async function startGoogleHandoff(req: Request, res: Response) {
+  try {
+    const initData = typeof req.body?.initData === "string" ? req.body.initData : "";
+    const profile = verifyTelegramInitData(initData);
+    if (!ENV.telegramBotUsername) {
+      throw new Error("ระบบยังไม่ได้ตั้งค่า TELEGRAM_BOT_USERNAME");
+    }
+    if (!ENV.googleRedirectUri) {
+      throw new Error("ระบบ Google OAuth ยังไม่ได้ตั้งค่า");
+    }
+
+    let currentUser: Awaited<ReturnType<typeof sdk.authenticateRequest>> | null = null;
+    try {
+      currentUser = await sdk.authenticateRequest(req);
+    } catch {
+      currentUser = null;
+    }
+
+    let user;
+    if (currentUser) {
+      const linkedTelegramUser = await db.getUserByAuthIdentity("telegram", profile.providerUserId);
+      if (linkedTelegramUser && linkedTelegramUser.id !== currentUser.id) {
+        throw new Error("บัญชี Telegram นี้เชื่อมกับบัญชีอื่นอยู่แล้ว");
+      }
+      await db.linkAuthIdentity({ userId: currentUser.id, provider: "telegram", ...profile });
+      user = currentUser;
+    } else {
+      user = await db.getUserByAuthIdentity("telegram", profile.providerUserId)
+        ?? await db.createUserForAuthIdentity({ provider: "telegram", ...profile });
+    }
+
+    const code = `goh_${randomBytes(32).toString("base64url")}`;
+    const codeHash = createHash("sha256").update(code).digest("hex");
+    await db.createAuthHandoff({
+      codeHash,
+      userId: user.id,
+      purpose: "google_oauth",
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    const oauthUrl = new URL("/api/auth/google", new URL(ENV.googleRedirectUri).origin);
+    oauthUrl.searchParams.set("handoff", code);
+    res.set("Cache-Control", "no-store");
+    res.status(200).json({ success: true, url: oauthUrl.toString() });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "ไม่สามารถเริ่ม Google OAuth ได้";
+    const status = message.includes("Database") ? 503 : 401;
+    res.status(status).json({ success: false, message });
+  }
+}
+
+async function completeGoogleHandoff(req: Request, res: Response) {
+  try {
+    const initData = typeof req.body?.initData === "string" ? req.body.initData : "";
+    const code = typeof req.body?.code === "string" ? req.body.code : "";
+    if (!/^goh_[A-Za-z0-9_-]{40,}$/.test(code)) {
+      throw new Error("รหัสส่งต่อไม่ถูกต้อง");
+    }
+
+    const profile = verifyTelegramInitData(initData);
+    const user = await db.getUserByAuthIdentity("telegram", profile.providerUserId);
+    if (!user) throw new Error("ไม่พบบัญชี Telegram ที่เริ่มการเข้าสู่ระบบนี้");
+
+    const codeHash = createHash("sha256").update(code).digest("hex");
+    await db.consumeAuthHandoff(codeHash, "telegram_return", user.id);
+
+    await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
+    const sessionToken = await sdk.createSessionToken(user.openId, {
+      name: user.name || profile.name,
+      expiresInMs: ONE_YEAR_MS,
+    });
+    res.cookie(COOKIE_NAME, sessionToken, {
+      ...getSessionCookieOptions(req),
+      maxAge: ONE_YEAR_MS,
+    });
+    res.set("Cache-Control", "no-store");
+    res.status(200).json({ success: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "ไม่สามารถกลับเข้า Telegram ได้";
+    const status = message.includes("Database") ? 503 : 401;
+    res.status(status).json({ success: false, message });
+  }
+}
+
 export function registerTelegramMiniAppAuthRoutes(app: Express) {
   app.post("/api/auth/telegram", (req, res) => void authenticateTelegram(req, res));
+  app.post("/api/auth/google/handoff/start", (req, res) => void startGoogleHandoff(req, res));
+  app.post("/api/auth/google/handoff/complete", (req, res) => void completeGoogleHandoff(req, res));
 }
