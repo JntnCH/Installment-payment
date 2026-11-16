@@ -15,6 +15,7 @@ export const ENV = {
   lineChannelSecret: process.env.LINE_CHANNEL_SECRET ?? "",
   lineRedirectUri: process.env.LINE_REDIRECT_URI ?? "",
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
+  telegramBotUsername: (process.env.TELEGRAM_BOT_USERNAME ?? "").replace(/^@/, ""),
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
