@@ -13,7 +13,6 @@ import {
   Layers,
 } from "lucide-react";
 import { toast } from "sonner";
-import { User } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
 import {
   initAuth,
@@ -26,6 +25,7 @@ import {
   createLedgerSpreadsheet,
   exportLedgerToGoogleSheet,
   GoogleDriveFile,
+  GoogleWorkspaceUser,
 } from "@/lib/googleAuth";
 import {
   PageHeader,
@@ -36,7 +36,7 @@ import {
 
 export default function GoogleSheetsSync() {
   // Auth state
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<GoogleWorkspaceUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -126,6 +126,8 @@ export default function GoogleSheetsSync() {
         setAccessToken(result.accessToken);
         toast.success(`เข้าสู่ระบบ Google สำเร็จ (${result.user.displayName || result.user.email})`);
         fetchUserSpreadsheets(result.accessToken);
+      } else {
+        toast.info("เปิด Safari เพื่อเข้าสู่ระบบ Google แล้วกลับเข้า Telegram เพื่อใช้งานต่อ");
       }
     } catch (err: any) {
       toast.error(`เข้าสู่ระบบ Google ไม่สำเร็จ: ${err.message || "เกิดข้อผิดพลาด"}`);
