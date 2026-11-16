@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { authenticateWithTelegram } from "@/const";
+import { authenticateWithTelegram, startGoogleLink } from "@/const";
 
 export default function AccountConnections() {
   const identities = trpc.auth.identities.useQuery();
@@ -8,6 +8,12 @@ export default function AccountConnections() {
   const isTelegramMiniApp = Boolean(window.Telegram?.WebApp?.initData);
 
   const startLink = (provider: "google" | "line") => {
+    if (provider === "google") {
+      void startGoogleLink().catch(error => {
+        setTelegramError(error instanceof Error ? error.message : "เชื่อม Google ไม่สำเร็จ");
+      });
+      return;
+    }
     window.location.assign(`/api/auth/${provider}?intent=link`);
   };
 
