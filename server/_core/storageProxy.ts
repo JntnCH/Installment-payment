@@ -37,11 +37,12 @@ export function registerStorageProxy(app: Express) {
           responseType: "stream",
           timeout: 30000,
         });
-        res.setHeader("Content-Type", file.headers["content-type"] || "application/octet-stream");
+        const contentType = file.headers["content-type"];
+        res.setHeader("Content-Type", typeof contentType === "string" ? contentType : "application/octet-stream");
         res.setHeader("Content-Disposition", "inline");
         res.setHeader("Cache-Control", "private, no-store");
         res.setHeader("X-Content-Type-Options", "nosniff");
-        file.data.on("error", error => {
+        file.data.on("error", (error: Error) => {
           console.error("[Google Drive receipt] stream failed:", error);
           if (!res.headersSent) res.status(502);
           res.end();
