@@ -209,7 +209,7 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
       }
 
       const telegramProviderUserId = handoff.telegramProviderUserId;
-      let targetUser;
+      let targetUser: NonNullable<Awaited<ReturnType<typeof db.getUserByAuthIdentity>>>;
       if (handoff.userId) {
         targetUser = await db.getUserByAuthIdentity("telegram", telegramProviderUserId);
         if (!targetUser || targetUser.id !== handoff.userId) {
