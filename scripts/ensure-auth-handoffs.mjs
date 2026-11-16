@@ -21,13 +21,15 @@ try {
   await connection.query(`
     CREATE TABLE IF NOT EXISTS auth_handoffs (
       codeHash varchar(64) NOT NULL,
-      userId int NOT NULL,
+      userId int NULL,
+      telegramProviderUserId varchar(255) NOT NULL,
       purpose enum('google_oauth','telegram_return') NOT NULL,
       expiresAt timestamp NOT NULL,
       consumedAt timestamp NULL,
       createdAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (codeHash),
       KEY auth_handoff_user_idx (userId),
+      KEY auth_handoff_telegram_user_idx (telegramProviderUserId),
       KEY auth_handoff_expiry_idx (purpose, expiresAt),
       CONSTRAINT auth_handoffs_user_fk
         FOREIGN KEY (userId) REFERENCES users (id)
@@ -43,6 +45,7 @@ try {
   const expected = {
     codeHash: "varchar",
     userId: "int",
+    telegramProviderUserId: "varchar",
     purpose: "enum",
     expiresAt: "timestamp",
     consumedAt: "timestamp",
