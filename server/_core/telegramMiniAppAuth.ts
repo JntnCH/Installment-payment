@@ -109,24 +109,25 @@ async function startGoogleHandoff(req: Request, res: Response) {
       currentUser = null;
     }
 
-    let user;
+    let userId: number | null = null;
     if (currentUser) {
       const linkedTelegramUser = await db.getUserByAuthIdentity("telegram", profile.providerUserId);
       if (linkedTelegramUser && linkedTelegramUser.id !== currentUser.id) {
         throw new Error("บัญชี Telegram นี้เชื่อมกับบัญชีอื่นอยู่แล้ว");
       }
       await db.linkAuthIdentity({ userId: currentUser.id, provider: "telegram", ...profile });
-      user = currentUser;
+      userId = currentUser.id;
     } else {
-      user = await db.getUserByAuthIdentity("telegram", profile.providerUserId)
-        ?? await db.createUserForAuthIdentity({ provider: "telegram", ...profile });
+      const existingTelegramUser = await db.getUserByAuthIdentity("telegram", profile.providerUserId);
+      userId = existingTelegramUser?.id ?? null;
     }
 
     const code = `goh_${randomBytes(32).toString("base64url")}`;
     const codeHash = createHash("sha256").update(code).digest("hex");
     await db.createAuthHandoff({
       codeHash,
-      userId: user.id,
+      userId,
+      telegramProviderUserId: profile.providerUserId,
       purpose: "google_oauth",
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     });
@@ -151,11 +152,14 @@ async function completeGoogleHandoff(req: Request, res: Response) {
     }
 
     const profile = verifyTelegramInitData(initData);
-    const user = await db.getUserByAuthIdentity("telegram", profile.providerUserId);
-    if (!user) throw new Error("ไม่พบบัญชี Telegram ที่เริ่มการเข้าสู่ระบบนี้");
-
     const codeHash = createHash("sha256").update(code).digest("hex");
-    await db.consumeAuthHandoff(codeHash, "telegram_return", user.id);
+    const handoff = await db.consumeAuthHandoff(codeHash, "telegram_return", profile.providerUserId);
+    if (!handoff.userId) throw new Error("รหัสส่งต่อไม่มีบัญชีผู้ใช้ที่ถูกต้อง");
+
+    const user = await db.getUserByAuthIdentity("telegram", profile.providerUserId);
+    if (!user || user.id !== handoff.userId) {
+      throw new Error("รหัสส่งต่อไม่ตรงกับบัญชี Telegram นี้");
+    }
 
     await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
     const sessionToken = await sdk.createSessionToken(user.openId, {
