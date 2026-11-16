@@ -25,7 +25,7 @@ type GoogleSessionResponse = {
 };
 
 async function requestGoogleSession(): Promise<GoogleSessionResponse | null> {
-  const response = await googleFetch("/api/auth/google/access-token", {
+  const response = await fetch("/api/auth/google/access-token", {
     credentials: "include",
     cache: "no-store",
   });
@@ -131,7 +131,7 @@ export async function listGoogleSpreadsheets(
   const query = encodeURIComponent(
     "mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false"
   );
-  const response = await fetch(
+  const response = await googleFetch(
     `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,webViewLink)&orderBy=modifiedTime desc&pageSize=30`,
     {
       headers: {
@@ -175,7 +175,7 @@ export async function createLedgerSpreadsheet(
     ],
   };
 
-  const response = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
+  const response = await googleFetch("https://sheets.googleapis.com/v4/spreadsheets", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -332,7 +332,7 @@ export async function exportLedgerToGoogleSheet(
 
     const missingSheets = requiredSheets.filter((title) => !existingTitles.has(title));
     if (missingSheets.length > 0) {
-      await fetch(
+      await googleFetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
         {
           method: "POST",
@@ -354,7 +354,7 @@ export async function exportLedgerToGoogleSheet(
     console.warn("Could not inspect/create tabs, attempting direct update:", err);
   }
 
-  const batchResponse = await fetch(
+  const batchResponse = await googleFetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
     {
       method: "POST",
@@ -390,7 +390,7 @@ export async function getSpreadsheetDetails(
   title: string;
   sheets: { title: string; sheetId: number; rowCount?: number }[];
 }> {
-  const response = await fetch(
+  const response = await googleFetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=properties.title,sheets.properties(sheetId,title,gridProperties.rowCount)`,
     {
       headers: {
@@ -427,7 +427,7 @@ export async function readSpreadsheetValues(
   range: string = "A1:Z5000"
 ): Promise<string[][]> {
   const encodedRange = encodeURIComponent(range);
-  const response = await fetch(
+  const response = await googleFetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodedRange}?valueRenderOption=FORMATTED_VALUE`,
     {
       headers: {
@@ -460,7 +460,7 @@ export async function createSpreadsheetTab(
   const safeTitle = title.trim();
   if (!safeTitle) throw new Error("กรุณาระบุชื่อแผ่นงาน (Worksheet Name)");
 
-  const response = await fetch(
+  const response = await googleFetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
     {
       method: "POST",
@@ -496,7 +496,7 @@ export async function createSpreadsheetTab(
 
   // If initial headers are provided, write them to row 1
   if (headers && headers.length > 0) {
-    await fetch(
+    await googleFetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
         `'${safeTitle}'!A1`
       )}?valueInputOption=USER_ENTERED`,
@@ -542,7 +542,7 @@ export async function exportDataToSpecificTab(
 
   if (clearExisting) {
     // Clear old data in range
-    await fetch(
+    await googleFetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
         `'${safeTitle}'!A1:Z5000`
       )}:clear`,
@@ -557,7 +557,7 @@ export async function exportDataToSpecificTab(
   }
 
   // Write new values
-  const writeRes = await fetch(
+  const writeRes = await googleFetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
       `'${safeTitle}'!A1`
     )}?valueInputOption=USER_ENTERED`,
@@ -593,7 +593,7 @@ export async function appendSpreadsheetRow(
   rowValues: (string | number)[]
 ): Promise<boolean> {
   const range = `${sheetName ? `'${sheetName}'!` : ""}A1`;
-  const response = await fetch(
+  const response = await googleFetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
       range
     )}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
