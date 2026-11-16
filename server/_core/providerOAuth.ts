@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import axios from "axios";
 import type { Express, Request, Response } from "express";
 import { parse as parseCookieHeader } from "cookie";
@@ -7,7 +7,7 @@ import * as db from "../db";
 import { ENV } from "./env";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
-import { saveGoogleRefreshToken } from "../googleSheets";
+import { getGoogleDriveAccessToken, getGoogleSheetsStatus, saveGoogleRefreshToken } from "../googleSheets";
 
 type Provider = "google" | "line";
 
@@ -67,7 +67,18 @@ async function startLogin(provider: Provider, req: Request, res: Response) {
     return;
   }
 
-  const intent = req.query.intent === "link" ? "link" : "login";
+  const handoffCode = provider === "google" && typeof req.query.handoff === "string"
+    ? req.query.handoff
+    : "";
+  const isTelegramHandoff = Boolean(handoffCode);
+  if (isTelegramHandoff && !/^goh_[A-Za-z0-9_-]{40,}$/.test(handoffCode)) {
+    res.status(400).send("Invalid Telegram handoff code");
+    return;
+  }
+
+  const intent: "login" | "link" | "telegram-handoff" = isTelegramHandoff
+    ? "telegram-handoff"
+    : req.query.intent === "link" ? "link" : "login";
   let linkUserId: number | null = null;
   if (intent === "link") {
     try {
@@ -84,6 +95,9 @@ async function startLogin(provider: Provider, req: Request, res: Response) {
     state,
     intent,
     linkUserId,
+    handoffCodeHash: isTelegramHandoff
+      ? createHash("sha256").update(handoffCode).digest("hex")
+      : null,
   })).toString("base64url");
   res.cookie(STATE_COOKIE[provider], stateCookie, {
     ...getSessionCookieOptions(req),
@@ -159,7 +173,7 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
   const state = typeof req.query.state === "string" ? req.query.state : "";
   const code = typeof req.query.code === "string" ? req.query.code : "";
   const stateCookie = cookies[STATE_COOKIE[provider]] ?? "";
-  let stateData: { state: string; intent: "login" | "link"; linkUserId: number | null } | null = null;
+  let stateData: { state: string; intent: "login" | "link" | "telegram-handoff"; linkUserId: number | null; handoffCodeHash?: string | null } | null = null;
   try {
     stateData = JSON.parse(Buffer.from(stateCookie, "base64url").toString("utf8"));
   } catch {
@@ -178,12 +192,48 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
   }
 
   try {
+    const handoffUserId = stateData.intent === "telegram-handoff"
+      ? await db.consumeAuthHandoff(stateData.handoffCodeHash ?? "", "google_oauth")
+      : null;
+
     const tokens = await exchangeCode(provider, code);
     const profile = provider === "google"
       ? (tokens.access_token ? await getGoogleProfile(tokens.access_token) : null)
       : (tokens.id_token ? await getLineProfile(tokens.id_token) : null);
 
     if (!profile) throw new Error("OAuth provider did not return required tokens");
+
+    if (stateData.intent === "telegram-handoff") {
+      if (provider !== "google" || !handoffUserId) {
+        throw new Error("Invalid Telegram Google handoff");
+      }
+      await db.linkAuthIdentity({
+        userId: handoffUserId,
+        provider: "google",
+        ...profile,
+      });
+      if (tokens.refresh_token) {
+        await saveGoogleRefreshToken(handoffUserId, tokens.refresh_token, profile.email);
+      }
+      const googleStatus = await getGoogleSheetsStatus(handoffUserId);
+      if (!googleStatus.connected) {
+        throw new Error("Google ไม่ได้ส่ง Refresh Token กลับมา กรุณาลองเชื่อมต่ออีกครั้ง");
+      }
+      if (!ENV.telegramBotUsername) {
+        throw new Error("TELEGRAM_BOT_USERNAME is not configured");
+      }
+
+      const returnCode = `goh_${randomBytes(32).toString("base64url")}`;
+      await db.createAuthHandoff({
+        codeHash: createHash("sha256").update(returnCode).digest("hex"),
+        userId: handoffUserId,
+        purpose: "telegram_return",
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      });
+      res.set("Cache-Control", "no-store");
+      res.redirect(302, `https://t.me/${ENV.telegramBotUsername}?startapp=${encodeURIComponent(returnCode)}`);
+      return;
+    }
 
     if (stateData.intent === "link") {
       if (!Number.isSafeInteger(stateData.linkUserId) || !stateData.linkUserId) {
@@ -224,13 +274,48 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
     res.redirect(302, "/");
   } catch (error) {
     console.error(`[${provider} OAuth] Callback failed:`, error);
+    if (stateData.intent === "telegram-handoff") {
+      if (ENV.telegramBotUsername) {
+        res.redirect(302, `https://t.me/${ENV.telegramBotUsername}`);
+      } else {
+        res.status(500).send("Google sign-in failed. Return to Telegram and try again.");
+      }
+      return;
+    }
     res.redirect(302, stateData.intent === "link" ? "/?auth=link-failed" : "/?auth=failed");
+  }
+}
+
+async function googleAccessToken(req: Request, res: Response) {
+  try {
+    const user = await sdk.authenticateRequest(req);
+    const status = await getGoogleSheetsStatus(user.id);
+    if (!status.connected) {
+      res.status(404).json({ connected: false });
+      return;
+    }
+    const accessToken = await getGoogleDriveAccessToken(user.id);
+    res.set("Cache-Control", "no-store, private");
+    res.status(200).json({
+      connected: true,
+      accessToken,
+      user: {
+        id: user.id,
+        displayName: user.name || status.connectedEmail || "Google User",
+        email: status.connectedEmail,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Google account is not connected";
+    const status = message.includes("Database") ? 503 : 401;
+    res.status(status).json({ connected: false, message });
   }
 }
 
 export function registerProviderOAuthRoutes(app: Express) {
   app.get("/api/auth/google", (req, res) => void startLogin("google", req, res));
   app.get("/api/auth/google/callback", (req, res) => void completeLogin("google", req, res));
+  app.get("/api/auth/google/access-token", (req, res) => void googleAccessToken(req, res));
   app.get("/api/auth/line", (req, res) => void startLogin("line", req, res));
   app.get("/api/auth/line/callback", (req, res) => void completeLogin("line", req, res));
 }
