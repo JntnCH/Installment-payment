@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feature/debtor-daily-monthly-payment]
+    branches: [main, feature/debtor-daily-monthly-payment, feature/google-drive-receipt-storage]
 
 permissions:
   contents: read
@@ -34,9 +34,7 @@ jobs:
         run: npm run check
 
       - name: Unit tests
-        if: always()
         run: npm test
 
       - name: Production build
-        if: always()
         run: npm run build
