@@ -1,6 +1,7 @@
 CREATE TABLE `auth_handoffs` (
   `codeHash` varchar(64) NOT NULL,
-  `userId` int NOT NULL,
+  `userId` int,
+  `telegramProviderUserId` varchar(255) NOT NULL,
   `purpose` enum('google_oauth','telegram_return') NOT NULL,
   `expiresAt` timestamp NOT NULL,
   `consumedAt` timestamp NULL,
@@ -10,5 +11,7 @@ CREATE TABLE `auth_handoffs` (
 );
 --> statement-breakpoint
 CREATE INDEX `auth_handoff_user_idx` ON `auth_handoffs` (`userId`);
+--> statement-breakpoint
+CREATE INDEX `auth_handoff_telegram_user_idx` ON `auth_handoffs` (`telegramProviderUserId`);
 --> statement-breakpoint
 CREATE INDEX `auth_handoff_expiry_idx` ON `auth_handoffs` (`purpose`,`expiresAt`);
