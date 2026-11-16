@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { monthlyBillSyncOutbox, monthlyBills } from "../drizzle/schema";
 import { getDb } from "./db";
-import { storagePut } from "./storage";
+import { uploadReceiptToGoogleDrive } from "./googleDrive";
 
 export type MonthlyBillInput = {
   billName: string;
@@ -63,7 +63,7 @@ export async function updateMonthlyBill(ownerId: number, id: string, input: Mont
   return rows[0];
 }
 
-export async function uploadMonthlyBillReceipt(ownerId: number, billId: string, fileName: string, mimeType: string, base64: string) {
+export async function uploadMonthlyBillReceipt(ownerId: number, billId: string, paidDate: string, fileName: string, mimeType: string, base64: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
   const rows = await db.select({ id: monthlyBills.id }).from(monthlyBills).where(and(
@@ -84,7 +84,7 @@ export async function recordMonthlyBillPayment(ownerId: number, input: { id: str
     eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, input.id), isNull(monthlyBills.deletedAt),
   )).limit(1);
   if (!rows[0]) throw new Error("ไม่พบบิลรายเดือน");
-  if (input.receiptKey && !input.receiptKey.startsWith("monthly-bills/" + ownerId + "/" + input.id + "/")) throw new Error("ไฟล์หลักฐานไม่ถูกต้อง");
+  if (input.receiptKey && !/^[a-zA-Z0-9_-]{10,}$/.test(input.receiptKey)) throw new Error("ไฟล์หลักฐานไม่ถูกต้อง");
   await db.transaction(async tx => {
     await tx.update(monthlyBills).set({ status: "paid", paidAmount: input.paidAmount.toFixed(2), paidAt: new Date(input.paidAt), receiptKey: input.receiptKey ?? null })
       .where(and(eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, input.id)));
