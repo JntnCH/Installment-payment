@@ -49,7 +49,7 @@ export default function MonthlyBillsManager() {
           reader.onerror = () => reject(new Error("อ่านไฟล์หลักฐานไม่สำเร็จ"));
           reader.readAsDataURL(receiptFile);
         });
-        const uploaded = await uploadReceipt.mutateAsync({ billId: paymentBill.id, fileName: receiptFile.name, mimeType: receiptFile.type as "image/jpeg" | "image/png" | "image/webp" | "application/pdf", base64 });
+        const uploaded = await uploadReceipt.mutateAsync({ billId: paymentBill.id, paidDate, fileName: receiptFile.name, mimeType: receiptFile.type as "image/jpeg" | "image/png" | "image/webp" | "application/pdf", base64 });
         receiptKey = uploaded.receiptKey;
       }
       await recordPayment.mutateAsync({ id: paymentBill.id, paidAmount: Number(paidAmount), paidAt: new Date(paidDate + "T12:00:00").toISOString(), receiptKey });
