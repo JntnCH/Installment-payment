@@ -29,7 +29,7 @@ Set these in Railway Variables. Never commit secret values to GitHub.
 3. Add the bot token as `TELEGRAM_BOT_TOKEN` in the Railway service Variables. Never expose it in frontend variables or commit it.
 4. Set `TELEGRAM_BOT_USERNAME` to the bot username without `@`, and configure the bot's **Main Mini App** in BotFather. The return link uses `https://t.me/<bot>?startapp=<one-time-code>`.
 5. Open the app from the bot's Mini App button. The frontend sends Telegram's raw `initData` to the backend; the backend verifies its HMAC signature and timestamp before creating a session.
-5. The Telegram authentication button is available only when the app is opened inside Telegram. A normal browser can continue using Google or LINE.
+6. The Telegram authentication button is available only when the app is opened inside Telegram. A normal browser can continue using Google or LINE.
 
 ## Google and LINE setup
 
