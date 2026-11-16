@@ -102,6 +102,27 @@ async function accessToken(userId: number) {
   return { token, spreadsheetId };
 }
 
+export async function getGoogleDriveAccessToken(userId: number): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select().from(googleSheetsConnections)
+    .where(eq(googleSheetsConnections.userId, userId)).limit(1);
+  const connection = rows[0];
+  if (!connection) throw new Error("กรุณาเชื่อมต่อบัญชี Google เดียวกับ Google Sheets ก่อน");
+  const response = await axios.post("https://oauth2.googleapis.com/token", new URLSearchParams({
+    client_id: ENV.googleClientId,
+    client_secret: ENV.googleClientSecret,
+    refresh_token: decrypt(connection.refreshTokenEncrypted),
+    grant_type: "refresh_token",
+  }).toString(), {
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    timeout: 15000,
+  });
+  const token = response.data?.access_token as string | undefined;
+  if (!token) throw new Error("Google ไม่ส่ง access token กลับมา");
+  return token;
+}
+
 async function googleRequest<T>(token: string, method: "GET" | "POST" | "PUT", url: string, data?: unknown) {
   const response = await axios.request<T>({
     method, url, data,
