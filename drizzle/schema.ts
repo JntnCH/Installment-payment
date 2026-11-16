@@ -33,6 +33,20 @@ export const authIdentities = mysqlTable("auth_identities", {
 export type AuthIdentity = typeof authIdentities.$inferSelect;
 export type InsertAuthIdentity = typeof authIdentities.$inferInsert;
 
+export const authHandoffs = mysqlTable("auth_handoffs", {
+  codeHash: varchar("codeHash", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  purpose: mysqlEnum("purpose", ["google_oauth", "telegram_return"]).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  consumedAt: timestamp("consumedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => ({
+  userIdx: index("auth_handoff_user_idx").on(table.userId),
+  expiryIdx: index("auth_handoff_expiry_idx").on(table.purpose, table.expiresAt),
+}));
+
+export type AuthHandoffPurpose = typeof authHandoffs.$inferSelect["purpose"];
+
 export const parties = mysqlTable("ledger_parties", {
   id: varchar("id", { length: 64 }).primaryKey(),
   ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
