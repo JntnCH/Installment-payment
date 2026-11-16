@@ -8,11 +8,12 @@ export type GoogleWorkspaceUser = {
 };
 
 export const GOOGLE_WORKSPACE_SCOPES = [
-  "https://www.googleapis.com/auth/drive",
-  "https://www.googleapis.com/auth/drive.file",
-  "https://www.googleapis.com/auth/drive.readonly",
+  "openid",
+  "email",
+  "profile",
   "https://www.googleapis.com/auth/spreadsheets",
-  "https://www.googleapis.com/auth/spreadsheets.readonly",
+  "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/drive.metadata.readonly",
 ];
 
 let cachedAccessToken: string | null = null;
