@@ -28,7 +28,7 @@ Set these in Railway Variables. Never commit secret values to GitHub.
 2. Configure its Mini App / Web App URL to `https://installment-payment-production.up.railway.app/`.
 3. Add the bot token as `TELEGRAM_BOT_TOKEN` in the Railway service Variables. Never expose it in frontend variables or commit it.
 4. Set `TELEGRAM_BOT_USERNAME` to the bot username without `@`, and configure the bot's **Main Mini App** in BotFather. The return link uses `https://t.me/<bot>?startapp=<one-time-code>`.
-4. Open the app from the bot's Mini App button. The frontend sends Telegram's raw `initData` to the backend; the backend verifies its HMAC signature and timestamp before creating a session.
+5. Open the app from the bot's Mini App button. The frontend sends Telegram's raw `initData` to the backend; the backend verifies its HMAC signature and timestamp before creating a session.
 5. The Telegram authentication button is available only when the app is opened inside Telegram. A normal browser can continue using Google or LINE.
 
 ## Google and LINE setup
@@ -39,7 +39,7 @@ Set these in Railway Variables. Never commit secret values to GitHub.
 
 ## Database migration
 
-The login flow requires the `auth_identities` table from `drizzle/0001_linked_auth_identities.sql`. This migration now allows `google`, `line`, and `telegram` identities. Confirm `DATABASE_URL` targets the existing Railway MySQL service, take a database backup, and apply this migration once. Do not run a broad schema push against production for this one-table change.
+The login flow uses `auth_identities` and the new `auth_handoffs` table. Railway pre-deploy runs `scripts/ensure-auth-handoffs.mjs` to create and verify the one-time handoff table. The matching schema migration is `drizzle/0004_telegram_google_handoffs.sql`. Confirm `DATABASE_URL` targets the existing Railway MySQL service and take a database backup before deploying. Do not run a broad schema push against production.
 
 ## Account behavior and security
 
@@ -51,3 +51,4 @@ The login flow requires the `auth_identities` table from `drizzle/0001_linked_au
 - Telegram-to-Safari Google login uses a random, hashed, single-use handoff code that expires after 10 minutes; the return code expires after 5 minutes and is bound to the same Telegram account. Google access/refresh tokens are never placed in deep links.
 - Ledger records remain scoped to the authenticated internal user ID.
 - Google and LINE OAuth callback errors return to the login screen with `?auth=failed`.
+- After deployment, reconnect Google once to grant the updated Drive metadata permission. Existing Google refresh tokens may not include the new scope.
