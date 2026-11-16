@@ -192,7 +192,7 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
   }
 
   try {
-    const handoffUserId = stateData.intent === "telegram-handoff"
+    const handoff = stateData.intent === "telegram-handoff"
       ? await db.consumeAuthHandoff(stateData.handoffCodeHash ?? "", "google_oauth")
       : null;
 
@@ -204,18 +204,42 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
     if (!profile) throw new Error("OAuth provider did not return required tokens");
 
     if (stateData.intent === "telegram-handoff") {
-      if (provider !== "google" || !handoffUserId) {
+      if (provider !== "google" || !handoff) {
         throw new Error("Invalid Telegram Google handoff");
       }
-      await db.linkAuthIdentity({
-        userId: handoffUserId,
-        provider: "google",
-        ...profile,
-      });
-      if (tokens.refresh_token) {
-        await saveGoogleRefreshToken(handoffUserId, tokens.refresh_token, profile.email);
+
+      const telegramProviderUserId = handoff.telegramProviderUserId;
+      let targetUser;
+      if (handoff.userId) {
+        targetUser = await db.getUserByAuthIdentity("telegram", telegramProviderUserId);
+        if (!targetUser || targetUser.id !== handoff.userId) {
+          throw new Error("Telegram account changed during Google sign-in");
+        }
+        const existingGoogleUser = await db.getUserByAuthIdentity("google", profile.providerUserId);
+        if (existingGoogleUser && existingGoogleUser.id !== targetUser.id) {
+          throw new Error("Google account is already linked to a different application account");
+        }
+        await db.linkAuthIdentity({
+          userId: targetUser.id,
+          provider: "google",
+          ...profile,
+        });
+      } else {
+        targetUser = await db.getUserByAuthIdentity("google", profile.providerUserId)
+          ?? await db.createUserForAuthIdentity({ provider: "google", ...profile });
+        await db.linkAuthIdentity({
+          userId: targetUser.id,
+          provider: "telegram",
+          providerUserId: telegramProviderUserId,
+          name: profile.name,
+          email: profile.email,
+        });
       }
-      const googleStatus = await getGoogleSheetsStatus(handoffUserId);
+
+      if (tokens.refresh_token) {
+        await saveGoogleRefreshToken(targetUser.id, tokens.refresh_token, profile.email);
+      }
+      const googleStatus = await getGoogleSheetsStatus(targetUser.id);
       if (!googleStatus.connected) {
         throw new Error("Google ไม่ได้ส่ง Refresh Token กลับมา กรุณาลองเชื่อมต่ออีกครั้ง");
       }
@@ -226,7 +250,8 @@ async function completeLogin(provider: Provider, req: Request, res: Response) {
       const returnCode = `goh_${randomBytes(32).toString("base64url")}`;
       await db.createAuthHandoff({
         codeHash: createHash("sha256").update(returnCode).digest("hex"),
-        userId: handoffUserId,
+        userId: targetUser.id,
+        telegramProviderUserId,
         purpose: "telegram_return",
         expiresAt: new Date(Date.now() + 5 * 60 * 1000),
       });
