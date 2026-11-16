@@ -69,7 +69,9 @@ function TelegramGoogleHandoffGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const webApp = window.Telegram?.WebApp;
-    const code = webApp?.initDataUnsafe?.start_param;
+    const code = webApp?.initDataUnsafe?.start_param
+      ?? new URLSearchParams(window.location.search).get("tgWebAppStartParam")
+      ?? "";
     if (!code?.startsWith("goh_")) {
       setChecking(false);
       return;
@@ -109,7 +111,7 @@ function TelegramGoogleHandoffGate({ children }: { children: ReactNode }) {
       <main className="min-h-screen flex items-center justify-center bg-[#F6F4F0] p-6">
         <section className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-sm">
           <p className="text-sm text-red-600">{error}</p>
-          <button type="button" onClick={() => window.location.replace("/")} className="mt-4 rounded-xl bg-stone-900 px-4 py-2 text-sm text-white">
+          <button type="button" onClick={() => setError("")} className="mt-4 rounded-xl bg-stone-900 px-4 py-2 text-sm text-white">
             กลับหน้าเข้าสู่ระบบ
           </button>
         </section>
