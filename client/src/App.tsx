@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -63,6 +63,63 @@ function LoginScreen() {
   );
 }
 
+function TelegramGoogleHandoffGate({ children }: { children: React.ReactNode }) {
+  const [checking, setChecking] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const webApp = window.Telegram?.WebApp;
+    const code = webApp?.initDataUnsafe?.start_param;
+    if (!code?.startsWith("goh_")) {
+      setChecking(false);
+      return;
+    }
+
+    if (!webApp?.initData) {
+      setError("ไม่พบข้อมูลยืนยันตัวตนจาก Telegram กรุณาเปิด Mini App ใหม่");
+      setChecking(false);
+      return;
+    }
+
+    void fetch("/api/auth/google/handoff/complete", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData: webApp.initData, code }),
+    })
+      .then(async response => {
+        const result = await response.json().catch(() => ({})) as { success?: boolean; message?: string };
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || "ยืนยันการกลับเข้า Telegram ไม่สำเร็จ");
+        }
+        setChecking(false);
+      })
+      .catch(reason => {
+        setError(reason instanceof Error ? reason.message : "ยืนยันการกลับเข้า Telegram ไม่สำเร็จ");
+        setChecking(false);
+      });
+  }, []);
+
+  if (checking) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-stone-500">กำลังเชื่อมต่อบัญชี Google กลับเข้า Telegram...</div>;
+  }
+
+  if (error) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-[#F6F4F0] p-6">
+        <section className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-sm">
+          <p className="text-sm text-red-600">{error}</p>
+          <button type="button" onClick={() => window.location.replace("/")} className="mt-4 rounded-xl bg-stone-900 px-4 py-2 text-sm text-white">
+            กลับหน้าเข้าสู่ระบบ
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
   if (loading) {
@@ -77,7 +134,7 @@ export default function App() {
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
-          <AuthenticatedApp />
+          <TelegramGoogleHandoffGate><AuthenticatedApp /></TelegramGoogleHandoffGate>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
