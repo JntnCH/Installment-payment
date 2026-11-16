@@ -51,7 +51,7 @@ export async function uploadReceiptToGoogleDrive(
   const monthIndex = Number(month) - 1;
   if (monthIndex < 0 || monthIndex > 11) throw new Error("เดือนที่ชำระไม่ถูกต้อง");
 
-  const rootId = await findOrCreateFolder(token, ROOT_FOLDER);
+  const rootId = await findOrCreateFolder(token, ROOT_FOLDER, "root");
   const userId = await findOrCreateFolder(token, `User_${ownerId}`, rootId);
   const yearId = await findOrCreateFolder(token, year, userId);
   const monthId = await findOrCreateFolder(token, MONTHS[monthIndex], yearId);
