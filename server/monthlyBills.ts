@@ -73,8 +73,8 @@ export async function uploadMonthlyBillReceipt(ownerId: number, billId: string, 
   const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "receipt";
   const data = Buffer.from(base64, "base64");
   if (!data.length || data.length > 8 * 1024 * 1024) throw new Error("ไฟล์ต้องมีขนาดไม่เกิน 8 MB");
-  const uploaded = await storagePut("monthly-bills/" + ownerId + "/" + billId + "/" + safeName, data, mimeType);
-  return { receiptKey: uploaded.key };
+  const uploaded = await uploadReceiptToGoogleDrive(ownerId, paidDate, safeName, mimeType, data);
+  return { receiptKey: uploaded.fileId };
 }
 
 export async function recordMonthlyBillPayment(ownerId: number, input: { id: string; paidAmount: number; paidAt: string; receiptKey?: string }) {
