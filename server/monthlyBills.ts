@@ -50,12 +50,14 @@ export async function updateMonthlyBill(ownerId: number, id: string, input: Mont
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
   await db.transaction(async tx => {
-    const rows = await tx.select({ id: monthlyBills.id }).from(monthlyBills)
+    const rows = await tx.select().from(monthlyBills)
       .where(and(eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, id), isNull(monthlyBills.deletedAt))).limit(1);
-    if (!rows[0]) throw new Error("ไม่พบบิลรายเดือน");
+    const existing = rows[0];
+    if (!existing) throw new Error("ไม่พบบิลรายเดือน");
+    // Editing bill details must never erase or reset the actual payment record.
     await tx.update(monthlyBills).set({
       billName: input.billName.trim(), amount: input.amount.toFixed(2), dueDate: input.dueDate,
-      status: input.status ?? "pending", note: input.note?.trim() || null,
+      status: existing.status, note: input.note?.trim() || null,
     }).where(and(eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, id)));
     await enqueue(tx, ownerId, id, "upsert");
   });

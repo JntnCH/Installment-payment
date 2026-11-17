@@ -54,6 +54,7 @@ export const contracts = mysqlTable("ledger_contracts", {
   partyId: varchar("partyId", { length: 64 }).notNull().references(() => parties.id, { onDelete: "cascade" }),
   title: varchar("title", { length: 255 }).notNull(),
   principal: decimal("principal", { precision: 15, scale: 2 }).notNull(),
+  downPayment: decimal("downPayment", { precision: 15, scale: 2 }).notNull().default("0.00"),
   interestRate: decimal("interestRate", { precision: 9, scale: 4 }).notNull().default("0.0000"),
   installmentCount: int("installmentCount").notNull(),
   startDate: date("startDate", { mode: "string" }).notNull(),

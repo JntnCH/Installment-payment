@@ -55,6 +55,7 @@ function toContract(row: ContractRow) {
     partyId: row.partyId,
     title: row.title,
     principal: asAmount(row.principal),
+    downPayment: asAmount(row.downPayment),
     interestRate: asAmount(row.interestRate),
     installmentCount: row.installmentCount,
     startDate: asDate(row.startDate),
@@ -71,6 +72,7 @@ function toScheduleTransaction(row: ScheduleRow) {
     installmentNo: row.installmentNo,
     amount: asAmount(row.amount),
     paidAmount: asAmount(row.paidAmount),
+    status: row.status,
     dueDate: asDate(row.dueDate),
     paidAt: asTimestamp(row.paidAt),
     source: "database:schedule",
@@ -403,32 +405,35 @@ export async function createLedgerContract(ownerId: number, input: ContractInput
   const now = new Date();
   const db = await getDb();
 
-  // Ensure schedules are generated if none provided
-  const schedulesToInsert =
-    input.schedules && input.schedules.length > 0
-      ? input.schedules
+  // The down payment is deducted once from principal + flat interest.
+  const totalCents = Math.round((input.principal * (1 + (input.interestRate || 0) / 100) - (input.downPayment || 0)) * 100);
+  if (totalCents <= 0) throw new Error("ยอดเงินหลังหักเงินดาวน์ต้องมากกว่า 0 บาท");
+  if ((input.downPayment || 0) > input.principal * (1 + (input.interestRate || 0) / 100)) {
+    throw new Error("เงินดาวน์ต้องไม่เกินยอดรวมสัญญา");
+  }
+  const count = Math.max(1, input.installmentCount || 1);
+  const suppliedSchedules = input.schedules ?? [];
+  const [baseYear, baseMonth, baseDay] = (input.startDate || new Date().toISOString().slice(0, 10)).split("-").map(Number);
+  const baseDate = new Date(baseYear, baseMonth - 1, baseDay || 1);
+  const baseCents = Math.floor(totalCents / count);
+  let remainderCents = totalCents;
+  const schedulesToInsert = Array.from({ length: count }, (_, index) => {
+    const supplied = suppliedSchedules[index];
+    const due = supplied?.dueDate
+      ? supplied.dueDate
       : (() => {
-          const count = Math.max(1, input.installmentCount || 1);
-          const totalAmount = input.principal * (1 + (input.interestRate || 0) / 100);
-          const perInstallment = Math.round((totalAmount / count) * 100) / 100;
-          const list = [];
-          const [year, month, day] = (input.startDate || new Date().toISOString().slice(0, 10))
-            .split("-")
-            .map(Number);
-          for (let i = 1; i <= count; i++) {
-            const d = new Date(year, month - 1 + (i - 1), day || 1);
-            const yStr = d.getFullYear();
-            const mStr = String(d.getMonth() + 1).padStart(2, "0");
-            const dStr = String(d.getDate()).padStart(2, "0");
-            list.push({
-              installmentNo: i,
-              dueDate: `${yStr}-${mStr}-${dStr}`,
-              amount: i === count ? Number((totalAmount - perInstallment * (count - 1)).toFixed(2)) : perInstallment,
-              note: `งวดที่ ${i}/${count}`,
-            });
-          }
-          return list;
+          const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + index, baseDate.getDate());
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         })();
+    const amountCents = index === count - 1 ? remainderCents : baseCents;
+    remainderCents -= amountCents;
+    return {
+      installmentNo: index + 1,
+      dueDate: due,
+      amount: amountCents / 100,
+      note: supplied?.note || `งวดที่ ${index + 1}/${count}`,
+    };
+  });
 
   if (db) {
     await db.insert(contracts).values({
@@ -437,6 +442,7 @@ export async function createLedgerContract(ownerId: number, input: ContractInput
       partyId: input.partyId,
       title: input.title,
       principal: input.principal.toFixed(2),
+      downPayment: (input.downPayment || 0).toFixed(2),
       interestRate: input.interestRate.toFixed(4),
       installmentCount: input.installmentCount,
       startDate: input.startDate,
@@ -467,6 +473,7 @@ export async function createLedgerContract(ownerId: number, input: ContractInput
     partyId: input.partyId,
     title: input.title,
     principal: input.principal.toFixed(2),
+    downPayment: (input.downPayment || 0).toFixed(2),
     interestRate: input.interestRate.toFixed(4),
     installmentCount: input.installmentCount,
     startDate: input.startDate,
@@ -502,27 +509,166 @@ export async function updateLedgerContract(ownerId: number, input: ContractUpdat
   const contract = await getOwnedContract(ownerId, input.id);
   if (!contract) throw new Error("ไม่พบสัญญาที่เลือก");
 
+  const principal = input.principal ?? asAmount(contract.principal);
+  const interestRate = input.interestRate ?? asAmount(contract.interestRate);
+  const downPayment = input.downPayment ?? asAmount(contract.downPayment);
+  const installmentCount = input.installmentCount ?? contract.installmentCount;
+  const totalCents = Math.round((principal * (1 + interestRate / 100) - downPayment) * 100);
+  if (totalCents <= 0) throw new Error("ยอดเงินหลังหักเงินดาวน์ต้องมากกว่า 0 บาท");
+  if (downPayment > principal * (1 + interestRate / 100)) throw new Error("เงินดาวน์ต้องไม่เกินยอดรวมสัญญา");
+
   const db = await getDb();
+  const nextContractValues = {
+    ...(input.title === undefined ? {} : { title: input.title }),
+    principal: principal.toFixed(2),
+    downPayment: downPayment.toFixed(2),
+    interestRate: interestRate.toFixed(4),
+    installmentCount,
+    ...(input.startDate === undefined ? {} : { startDate: input.startDate }),
+    ...(input.status === undefined ? {} : { status: input.status }),
+  };
+
   if (db) {
-    await db
-      .update(contracts)
-      .set({
-        ...(input.title === undefined ? {} : { title: input.title }),
-        ...(input.principal === undefined ? {} : { principal: input.principal.toFixed(2) }),
-        ...(input.interestRate === undefined ? {} : { interestRate: input.interestRate.toFixed(4) }),
-        ...(input.installmentCount === undefined ? {} : { installmentCount: input.installmentCount }),
-        ...(input.startDate === undefined ? {} : { startDate: input.startDate }),
-        ...(input.status === undefined ? {} : { status: input.status }),
-      })
-      .where(and(eq(contracts.ownerId, ownerId), eq(contracts.id, input.id)));
+    await db.transaction(async tx => {
+      const rows = await tx.select().from(contractPaymentSchedules)
+        .where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.contractId, input.id)))
+        .orderBy(asc(contractPaymentSchedules.installmentNo));
+
+      const closedRows = rows.filter(row => row.status === "paid" || row.status === "waived");
+      const openRows = rows.filter(row => row.status === "pending");
+      const paidCents = rows.reduce((sum, row) => {
+        if (row.status === "waived") return sum;
+        const amountCents = Math.max(0, Math.round(asAmount(row.amount) * 100));
+        const recordedPaid = Math.max(0, Math.round(asAmount(row.paidAmount) * 100));
+        return sum + (row.status === "paid" ? Math.max(amountCents, recordedPaid) : recordedPaid);
+      }, 0);
+      let remainingCents = totalCents - paidCents;
+      if (remainingCents < 0) throw new Error("ยอดสัญญาใหม่ต่ำกว่ายอดที่ชำระสะสมแล้ว กรุณาตรวจสอบยอดเงินต้น ดอกเบี้ย และเงินดาวน์");
+      const partialRows = openRows.filter(row => asAmount(row.paidAmount) > 0);
+      const desiredOpenCount = installmentCount - closedRows.length;
+      if (desiredOpenCount < partialRows.length || desiredOpenCount < 0) {
+        throw new Error("จำนวนงวดใหม่ต้องไม่น้อยกว่างวดที่ชำระแล้วหรือมีประวัติชำระบางส่วน");
+      }
+      if (desiredOpenCount === 0 && remainingCents > 0) {
+        throw new Error("ยังมียอดคงเหลือ แต่จำนวนงวดใหม่ไม่เหลือสำหรับกระจายยอด");
+      }
+      if (desiredOpenCount > 0 && remainingCents < desiredOpenCount) {
+        throw new Error("ยอดคงเหลือไม่เพียงพอสำหรับจำนวนงวดใหม่ กรุณาลดจำนวนงวดหรือปรับยอดสัญญา");
+      }
+
+      const flexibleRows = openRows.filter(row => asAmount(row.paidAmount) <= 0);
+      const keepRows = [...partialRows, ...flexibleRows].slice(0, desiredOpenCount);
+      const removeRows = [...partialRows, ...flexibleRows].slice(desiredOpenCount);
+      if (removeRows.some(row => asAmount(row.paidAmount) > 0)) {
+        throw new Error("ไม่สามารถลบงวดที่มีประวัติชำระเงินได้");
+      }
+      for (const row of removeRows) {
+        await tx.delete(contractPaymentSchedules).where(eq(contractPaymentSchedules.id, row.id));
+      }
+
+      let latestDate = rows.reduce((latest, row) => row.dueDate > latest ? row.dueDate : latest, contract.startDate);
+      const orderedDueDates = rows.map(row => row.dueDate).sort();
+      const scheduleIntervalDays = orderedDueDates.length > 1
+        ? Math.max(1, Math.round((new Date(`${orderedDueDates[orderedDueDates.length - 1]}T00:00:00`).getTime() - new Date(`${orderedDueDates[orderedDueDates.length - 2]}T00:00:00`).getTime()) / 86_400_000))
+        : 30;
+      let nextInstallmentNo = rows.reduce((max, row) => Math.max(max, row.installmentNo), 0) + 1;
+      while (keepRows.length < desiredOpenCount) {
+        const previous = new Date(`${latestDate}T00:00:00`);
+        const next = scheduleIntervalDays >= 25
+          ? new Date(previous.getFullYear(), previous.getMonth() + 1, previous.getDate())
+          : new Date(previous.getFullYear(), previous.getMonth(), previous.getDate() + scheduleIntervalDays);
+        latestDate = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+        const newRow = {
+          id: crypto.randomUUID(), ownerId, partyId: contract.partyId, contractId: input.id,
+          installmentNo: nextInstallmentNo++, dueDate: latestDate, amount: "0.00", paidAmount: "0.00",
+          status: "pending" as const, paidAt: null, note: `งวดที่ ${keepRows.length + 1}/${installmentCount}`,
+        };
+        await tx.insert(contractPaymentSchedules).values(newRow);
+        keepRows.push(newRow as typeof rows[number]);
+      }
+
+      const baseAllocation = desiredOpenCount > 0 ? Math.floor(remainingCents / desiredOpenCount) : 0;
+      let allocated = 0;
+      for (let index = 0; index < keepRows.length; index++) {
+        const row = keepRows[index];
+        const alreadyPaid = Math.max(0, Math.round(asAmount(row.paidAmount) * 100));
+        const allocation = index === keepRows.length - 1 ? remainingCents - allocated : baseAllocation;
+        allocated += allocation;
+        await tx.update(contractPaymentSchedules).set({
+          amount: ((alreadyPaid + allocation) / 100).toFixed(2),
+          note: row.note || `งวดที่ ${index + 1}/${installmentCount}`,
+        }).where(eq(contractPaymentSchedules.id, row.id));
+      }
+
+      await tx.update(contracts).set(nextContractValues)
+        .where(and(eq(contracts.ownerId, ownerId), eq(contracts.id, input.id)));
+    });
     return getContractLedger(ownerId, input.id);
+  }
+
+  const rows = Array.from(memorySchedules.values())
+    .filter(row => row.ownerId === ownerId && row.contractId === input.id)
+    .sort((a, b) => a.installmentNo - b.installmentNo);
+  const closedRows = rows.filter(row => row.status === "paid" || row.status === "waived");
+  const openRows = rows.filter(row => row.status === "pending");
+  const paidCents = rows.reduce((sum, row) => {
+    if (row.status === "waived") return sum;
+    const amountCents = Math.max(0, Math.round(asAmount(row.amount) * 100));
+    const recordedPaid = Math.max(0, Math.round(asAmount(row.paidAmount) * 100));
+    return sum + (row.status === "paid" ? Math.max(amountCents, recordedPaid) : recordedPaid);
+  }, 0);
+  let remainingCents = totalCents - paidCents;
+  if (remainingCents < 0) throw new Error("ยอดสัญญาใหม่ต่ำกว่ายอดที่ชำระสะสมแล้ว กรุณาตรวจสอบยอดเงินต้น ดอกเบี้ย และเงินดาวน์");
+  const partialRows = openRows.filter(row => asAmount(row.paidAmount) > 0);
+  const desiredOpenCount = installmentCount - closedRows.length;
+  if (desiredOpenCount < partialRows.length || desiredOpenCount < 0) throw new Error("จำนวนงวดใหม่ต้องไม่น้อยกว่างวดที่ชำระแล้วหรือมีประวัติชำระบางส่วน");
+  if (desiredOpenCount === 0 && remainingCents > 0) throw new Error("ยังมียอดคงเหลือ แต่จำนวนงวดใหม่ไม่เหลือสำหรับกระจายยอด");
+  if (desiredOpenCount > 0 && remainingCents < desiredOpenCount) throw new Error("ยอดคงเหลือไม่เพียงพอสำหรับจำนวนงวดใหม่ กรุณาลดจำนวนงวดหรือปรับยอดสัญญา");
+  const flexibleRows = openRows.filter(row => asAmount(row.paidAmount) <= 0);
+  const keepRows = [...partialRows, ...flexibleRows].slice(0, desiredOpenCount);
+  const removeRows = [...partialRows, ...flexibleRows].slice(desiredOpenCount);
+  if (removeRows.some(row => asAmount(row.paidAmount) > 0)) throw new Error("ไม่สามารถลบงวดที่มีประวัติชำระเงินได้");
+  for (const row of removeRows) memorySchedules.delete(row.id);
+  let latestDate = rows.reduce((latest, row) => row.dueDate > latest ? row.dueDate : latest, contract.startDate);
+  const orderedDueDates = rows.map(row => row.dueDate).sort();
+  const scheduleIntervalDays = orderedDueDates.length > 1
+    ? Math.max(1, Math.round((new Date(`${orderedDueDates[orderedDueDates.length - 1]}T00:00:00`).getTime() - new Date(`${orderedDueDates[orderedDueDates.length - 2]}T00:00:00`).getTime()) / 86_400_000))
+    : 30;
+  let nextInstallmentNo = rows.reduce((max, row) => Math.max(max, row.installmentNo), 0) + 1;
+  while (keepRows.length < desiredOpenCount) {
+    const previous = new Date(`${latestDate}T00:00:00`);
+    const next = scheduleIntervalDays >= 25
+      ? new Date(previous.getFullYear(), previous.getMonth() + 1, previous.getDate())
+      : new Date(previous.getFullYear(), previous.getMonth(), previous.getDate() + scheduleIntervalDays);
+    latestDate = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+    const id = crypto.randomUUID();
+    const row: ScheduleRow = {
+      id, ownerId, partyId: contract.partyId, contractId: input.id, installmentNo: nextInstallmentNo++,
+      dueDate: latestDate, amount: "0.00", paidAmount: "0.00", status: "pending", paidAt: null,
+      note: `งวดที่ ${keepRows.length + 1}/${installmentCount}`, createdAt: new Date(), updatedAt: new Date(),
+    };
+    memorySchedules.set(id, row);
+    keepRows.push(row);
+  }
+  const baseAllocation = desiredOpenCount > 0 ? Math.floor(remainingCents / desiredOpenCount) : 0;
+  let allocated = 0;
+  for (let index = 0; index < keepRows.length; index++) {
+    const row = keepRows[index];
+    const alreadyPaid = Math.max(0, Math.round(asAmount(row.paidAmount) * 100));
+    const allocation = index === keepRows.length - 1 ? remainingCents - allocated : baseAllocation;
+    allocated += allocation;
+    memorySchedules.set(row.id, {
+      ...row, amount: ((alreadyPaid + allocation) / 100).toFixed(2),
+      note: row.note || `งวดที่ ${index + 1}/${installmentCount}`, updatedAt: new Date(),
+    });
   }
   const updated: ContractRow = {
     ...contract,
     title: input.title ?? contract.title,
-    principal: input.principal !== undefined ? input.principal.toFixed(2) : contract.principal,
-    interestRate: input.interestRate !== undefined ? input.interestRate.toFixed(4) : contract.interestRate,
-    installmentCount: input.installmentCount ?? contract.installmentCount,
+    principal: principal.toFixed(2),
+    downPayment: downPayment.toFixed(2),
+    interestRate: interestRate.toFixed(4),
+    installmentCount,
     startDate: input.startDate ?? contract.startDate,
     status: input.status ?? contract.status,
     updatedAt: new Date(),
@@ -935,6 +1081,7 @@ export async function getDashboardStats(ownerId: number) {
   }> = [];
 
   for (const s of allSchedules) {
+    if (s.status === "waived") continue;
     const amount = asAmount(s.amount);
     const paidAmount = asAmount(s.paidAmount);
     const party = partyMap.get(s.partyId);
@@ -1061,6 +1208,7 @@ export async function getDashboardStats(ownerId: number) {
 
   const monthlyTimelineMap = new Map<string, { month: string; scheduled: number; collected: number; pending: number }>();
   for (const s of allSchedules) {
+    if (s.status === "waived") continue;
     const due = asDate(s.dueDate);
     const monthKey = due ? due.slice(0, 7) : "ไม่ระบุ";
     const current = monthlyTimelineMap.get(monthKey) || { month: monthKey, scheduled: 0, collected: 0, pending: 0 };

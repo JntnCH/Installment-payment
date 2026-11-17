@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 const scripts = [
   "scripts/ensure-auth-identities.mjs",
   "scripts/ensure-monthly-bills.mjs",
+  "scripts/ensure-contract-down-payment.mjs",
 ];
 
 for (const script of scripts) {
