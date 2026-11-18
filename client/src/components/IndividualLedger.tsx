@@ -126,7 +126,7 @@ export default function IndividualLedger({
     totalAmount: "0",
     downPayment: "0",
     interestRate: "0",
-    installmentCount: 1,
+    installmentCount: "1",
     startDate: "",
     status: "active" as "active" | "completed" | "cancelled",
   });
@@ -337,7 +337,7 @@ export default function IndividualLedger({
       totalAmount: String((Number(c.principal) * (1 + Number(c.interestRate || 0) / 100)).toFixed(2)),
       downPayment: String(c.downPayment || 0),
       interestRate: String(c.interestRate || 0),
-      installmentCount: c.installmentCount || 1,
+      installmentCount: String(c.installmentCount || 1),
       startDate: c.startDate || new Date().toISOString().slice(0, 10),
       status: c.status || "active",
     });
@@ -355,6 +355,11 @@ export default function IndividualLedger({
       toast.error("ยอดรวมสัญญาต้องไม่น้อยกว่าเงินต้น");
       return;
     }
+    const installmentCount = Number(editContractForm.installmentCount);
+    if (!Number.isInteger(installmentCount) || installmentCount < 1 || installmentCount > 1000) {
+      toast.error("จำนวนงวดต้องเป็นเลขจำนวนเต็มตั้งแต่ 1 ถึง 1,000");
+      return;
+    }
 
     try {
       await updateContractMutation.mutateAsync({
@@ -363,7 +368,7 @@ export default function IndividualLedger({
         principal: parseFloat(editContractForm.principal) || 0,
         downPayment: parseFloat(editContractForm.downPayment) || 0,
         interestRate: parseFloat(editContractForm.interestRate) || 0,
-        installmentCount: editContractForm.installmentCount,
+        installmentCount,
         startDate: editContractForm.startDate,
         status: editContractForm.status,
       });
@@ -1540,7 +1545,7 @@ export default function IndividualLedger({
                     max="1000"
                     required
                     value={editContractForm.installmentCount}
-                    onChange={(e) => setEditContractForm({ ...editContractForm, installmentCount: Math.max(1, Number(e.target.value) || 1) })}
+                    onChange={(e) => setEditContractForm({ ...editContractForm, installmentCount: e.target.value })}
                     className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[12px] text-sm font-mono tabular-nums text-[#1C1917]"
                   />
                 </div>
