@@ -405,12 +405,12 @@ export async function createLedgerContract(ownerId: number, input: ContractInput
   const now = new Date();
   const db = await getDb();
 
-  // The down payment is deducted once from principal + flat interest.
-  const totalCents = Math.round((input.principal * (1 + (input.interestRate || 0) / 100) - (input.downPayment || 0)) * 100);
+  // Product installment contracts use a gross principal and deduct the down payment before interest.
+  // Debt/loan contracts now create with downPayment = 0.
+  const downPayment = input.downPayment || 0;
+  if (downPayment > input.principal) throw new Error("เงินดาวน์ต้องไม่เกินราคา/เงินต้นตามสัญญา");
+  const totalCents = Math.round(((input.principal - downPayment) * (1 + (input.interestRate || 0) / 100)) * 100);
   if (totalCents <= 0) throw new Error("ยอดเงินหลังหักเงินดาวน์ต้องมากกว่า 0 บาท");
-  if ((input.downPayment || 0) > input.principal * (1 + (input.interestRate || 0) / 100)) {
-    throw new Error("เงินดาวน์ต้องไม่เกินยอดรวมสัญญา");
-  }
   const count = Math.max(1, input.installmentCount || 1);
   const suppliedSchedules = input.schedules ?? [];
   const [baseYear, baseMonth, baseDay] = (input.startDate || new Date().toISOString().slice(0, 10)).split("-").map(Number);
@@ -513,9 +513,18 @@ export async function updateLedgerContract(ownerId: number, input: ContractUpdat
   const interestRate = input.interestRate ?? asAmount(contract.interestRate);
   const downPayment = input.downPayment ?? asAmount(contract.downPayment);
   const installmentCount = input.installmentCount ?? contract.installmentCount;
-  const totalCents = Math.round((principal * (1 + interestRate / 100) - downPayment) * 100);
+  // Product contracts are created with the "ผ่อน " title prefix. Keep legacy debt formulas unchanged.
+  const isProductInstallment = (input.title ?? contract.title).startsWith("ผ่อน ");
+  if (isProductInstallment && downPayment > principal) {
+    throw new Error("เงินดาวน์ต้องไม่เกินราคา/เงินต้นตามสัญญา");
+  }
+  if (!isProductInstallment && downPayment > principal * (1 + interestRate / 100)) {
+    throw new Error("เงินดาวน์ต้องไม่เกินยอดรวมสัญญา");
+  }
+  const totalCents = Math.round((isProductInstallment
+    ? (principal - downPayment) * (1 + interestRate / 100)
+    : principal * (1 + interestRate / 100) - downPayment) * 100);
   if (totalCents <= 0) throw new Error("ยอดเงินหลังหักเงินดาวน์ต้องมากกว่า 0 บาท");
-  if (downPayment > principal * (1 + interestRate / 100)) throw new Error("เงินดาวน์ต้องไม่เกินยอดรวมสัญญา");
 
   const db = await getDb();
   const nextContractValues = {
@@ -736,12 +745,19 @@ export async function updateLedgerSchedule(ownerId: number, input: ScheduleUpdat
       .where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.id, input.id)))
       .limit(1);
     if (!schedule) throw new Error("ไม่พบงวดชำระที่เลือก");
-    if (schedule.status !== "pending") throw new Error("แก้ไขได้เฉพาะงวดที่ยังรอชำระ");
+    if (schedule.status === "waived") throw new Error("ไม่สามารถแก้ไขงวดที่ยกเว้นชำระแล้ว");
+    const currentAmountCents = Math.max(0, Math.round(asAmount(schedule.amount) * 100));
+    const recordedPaidCents = Math.max(0, Math.round(asAmount(schedule.paidAmount) * 100));
+    const paidCents = schedule.status === "paid" ? Math.max(currentAmountCents, recordedPaidCents) : recordedPaidCents || (schedule.paidAt ? currentAmountCents : 0);
+    const nextAmountCents = input.amount === undefined ? currentAmountCents : Math.round(input.amount * 100);
+    if (nextAmountCents < paidCents) throw new Error("ยอดงวดใหม่ต้องไม่น้อยกว่ายอดที่ชำระไปแล้ว");
     await db
       .update(contractPaymentSchedules)
       .set({
         ...(input.dueDate === undefined ? {} : { dueDate: input.dueDate }),
-        ...(input.amount === undefined ? {} : { amount: input.amount.toFixed(2) }),
+        ...(input.amount === undefined ? {} : { amount: (nextAmountCents / 100).toFixed(2) }),
+        paidAmount: (paidCents / 100).toFixed(2),
+        status: nextAmountCents <= paidCents ? "paid" : "pending",
         ...(input.note === undefined ? {} : { note: input.note || null }),
       })
       .where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.id, input.id)));
@@ -754,11 +770,18 @@ export async function updateLedgerSchedule(ownerId: number, input: ScheduleUpdat
   }
   const s = memorySchedules.get(input.id);
   if (!s || s.ownerId !== ownerId) throw new Error("ไม่พบงวดชำระที่เลือก");
-  if (s.status !== "pending") throw new Error("แก้ไขได้เฉพาะงวดที่ยังรอชำระ");
+  if (s.status === "waived") throw new Error("ไม่สามารถแก้ไขงวดที่ยกเว้นชำระแล้ว");
+  const currentAmountCents = Math.max(0, Math.round(asAmount(s.amount) * 100));
+  const recordedPaidCents = Math.max(0, Math.round(asAmount(s.paidAmount) * 100));
+  const paidCents = s.status === "paid" ? Math.max(currentAmountCents, recordedPaidCents) : recordedPaidCents || (s.paidAt ? currentAmountCents : 0);
+  const nextAmountCents = input.amount === undefined ? currentAmountCents : Math.round(input.amount * 100);
+  if (nextAmountCents < paidCents) throw new Error("ยอดงวดใหม่ต้องไม่น้อยกว่ายอดที่ชำระไปแล้ว");
   const updated: ScheduleRow = {
     ...s,
     dueDate: input.dueDate ?? s.dueDate,
-    amount: input.amount !== undefined ? input.amount.toFixed(2) : s.amount,
+    amount: (nextAmountCents / 100).toFixed(2),
+    paidAmount: (paidCents / 100).toFixed(2),
+    status: nextAmountCents <= paidCents ? "paid" : "pending",
     note: input.note !== undefined ? input.note || null : s.note,
     updatedAt: new Date(),
   };
@@ -934,28 +957,50 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
   }
   const s = memorySchedules.get(input.scheduleId);
   if (!s || s.ownerId !== ownerId) throw new Error("ไม่พบงวดชำระที่เลือก");
-
-  const updated: ScheduleRow = {
-    ...s,
-    status: "paid",
-    paidAmount: input.paidAmount.toFixed(2),
-    paidAt,
-    updatedAt: new Date(),
-  };
-  memorySchedules.set(input.scheduleId, updated);
-
-  await createLedgerTransaction(ownerId, {
-    partyId: s.partyId,
-    contractId: s.contractId,
-    scheduleId: s.id,
-    type: "payment",
-    amount: input.paidAmount,
-    occurredAt: paidAt,
-    source: input.source,
-    note: input.note || `ชำระงวดที่ ${s.installmentNo}`,
-  });
-
-  return toScheduleTransaction(updated);
+  if (s.status !== "pending") throw new Error("งวดนี้ถูกปิดยอดแล้ว");
+  const contractSchedules = Array.from(memorySchedules.values()).filter(row => row.ownerId === ownerId && row.contractId === s.contractId).sort((a, b) => a.installmentNo - b.installmentNo);
+  const pendingSchedules = contractSchedules.filter(row => row.status === "pending");
+  if (!pendingSchedules.length) throw new Error("ไม่พบงวดที่ยังมียอดค้างชำระ");
+  const outstandingCents = contractSchedules.reduce((sum, row) => {
+    if (row.status === "waived") return sum;
+    const amountCents = Math.max(0, Math.round(asAmount(row.amount) * 100));
+    const paidCents = Math.max(0, Math.round(asAmount(row.paidAmount) * 100));
+    const actualPaidCents = paidCents > 0 ? paidCents : row.status === "paid" || row.paidAt ? amountCents : 0;
+    return sum + Math.max(0, amountCents - actualPaidCents);
+  }, 0);
+  const paymentCents = Math.max(0, Math.round(input.paidAmount * 100));
+  if (paymentCents > outstandingCents) throw new Error("ยอดชำระสูงกว่ายอดหนี้คงเหลือทั้งหมด กรุณาตรวจสอบยอดอีกครั้ง");
+  const baseCents = Math.floor(outstandingCents / pendingSchedules.length);
+  const allocations = pendingSchedules.map((row, index) => ({row, allocationCents: index === pendingSchedules.length - 1 ? outstandingCents - baseCents * (pendingSchedules.length - 1) : baseCents, previousPaidCents: Math.max(0, Math.round(asAmount(row.paidAmount) * 100))}));
+  const selectedIndex = allocations.findIndex(item => item.row.id === s.id);
+  if (selectedIndex < 0) throw new Error("ไม่พบงวดที่เลือกในรายการค้างชำระ");
+  if (paymentCents > allocations[selectedIndex].allocationCents) {
+    const others = allocations.filter((_, index) => index !== selectedIndex);
+    if (!others.length) throw new Error("ยอดชำระสูงกว่ายอดคงเหลือของงวดสุดท้าย");
+    const baseOther = Math.floor((outstandingCents - paymentCents) / others.length);
+    let remainingOther = outstandingCents - paymentCents;
+    let otherIndex = 0;
+    for (let index = 0; index < allocations.length; index++) {
+      if (index === selectedIndex) allocations[index].allocationCents = paymentCents;
+      else {
+        const allocation = otherIndex === others.length - 1 ? remainingOther : baseOther;
+        allocations[index].allocationCents = allocation;
+        remainingOther -= allocation;
+        otherIndex++;
+      }
+    }
+  }
+  const selected = allocations[selectedIndex];
+  const newPaidCents = selected.previousPaidCents + paymentCents;
+  const newAmountCents = selected.previousPaidCents + selected.allocationCents;
+  for (const item of allocations) {
+    const revisedAmountCents = item.previousPaidCents + item.allocationCents;
+    const isSelected = item.row.id === s.id;
+    memorySchedules.set(item.row.id, {...item.row, amount: (revisedAmountCents / 100).toFixed(2), ...(isSelected ? {status: newPaidCents >= newAmountCents ? "paid" : "pending", paidAmount: (newPaidCents / 100).toFixed(2), paidAt: newPaidCents >= newAmountCents ? paidAt : null} : {}), updatedAt: new Date()});
+  }
+  await createLedgerTransaction(ownerId, {partyId: s.partyId, contractId: s.contractId, scheduleId: s.id, type: "payment", amount: input.paidAmount, occurredAt: paidAt, source: input.source, note: input.note || `ชำระงวดที่ ${s.installmentNo}`});
+  const updated = memorySchedules.get(s.id);
+  return updated ? toScheduleTransaction(updated) : null;
 }
 
 export async function deleteLedgerParty(ownerId: number, partyId: string) {
