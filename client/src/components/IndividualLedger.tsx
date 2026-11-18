@@ -511,7 +511,7 @@ export default function IndividualLedger({
       setContractForm({
         title: "",
         principal: "",
-            interestRate: "0",
+        interestRate: "0",
         installmentCount: "1",
         cycleType: "monthly",
         startDate: new Date().toISOString().slice(0, 10),
@@ -928,14 +928,14 @@ export default function IndividualLedger({
 
                         {/* 2. Total Repayable */}
                         <div className="p-3.5 bg-[#FAF7F2] rounded-[16px] border border-[#1C1917]/5 text-center shadow-xs">
-                          <div className="text-[10px] text-[#78716C] font-medium">2. ยอดจัดผ่อนหลังหักดาวน์</div>
+                          <div className="text-[10px] text-[#78716C] font-medium">2. ยอดรวมตารางงวด</div>
                           <div className="font-bold font-mono text-sm sm:text-base text-[#1C1917] mt-1">
                             ฿{contractStats.totalRepayable.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                           </div>
                         </div>
 
                         <div className="p-3.5 bg-[#FAF7F2] rounded-[16px] border border-[#1C1917]/5 text-center shadow-xs">
-                          <div className="text-[10px] text-[#78716C] font-medium">ยอดรวมก่อนหักดาวน์</div>
+                          <div className="text-[10px] text-[#78716C] font-medium">ยอดรวมเงินต้นและดอกเบี้ย</div>
                           <div className="font-bold font-mono text-sm sm:text-base text-[#1C1917] mt-1">
                             ฿{contractStats.grossTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                           </div>
@@ -949,8 +949,6 @@ export default function IndividualLedger({
                           </div>
                         </div>
 
-                        
-                        </div>
 
                         {/* 4. Total Paid */}
                         <div className="p-3.5 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20 text-center shadow-xs">
