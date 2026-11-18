@@ -150,6 +150,26 @@ export const appRouter = router({
     entityType: adminProcedure
       .input(z.object({ name: z.string().min(1) }))
       .query(({ input }) => incomeExpensesAdminRequest("GET", `/dialogflow/entity-types/${encodeURIComponent(input.name)}`)),
+    createEntityType: adminProcedure
+      .input(z.object({
+        displayName: z.string().trim().min(1).max(200),
+        entities: z.array(z.object({
+          value: z.string().trim().min(1),
+          synonyms: z.array(z.string().trim().min(1)).default([]),
+        })).default([]),
+      }))
+      .mutation(({ input }) => incomeExpensesAdminRequest("POST", "/dialogflow/entity-types", input)),
+    deleteEntityType: adminProcedure
+      .input(z.object({ name: z.string().min(1) }))
+      .mutation(({ input }) => incomeExpensesAdminRequest("DELETE", `/dialogflow/entity-types/${encodeURIComponent(input.name)}`)),
+    updateEntityEntry: adminProcedure
+      .input(z.object({
+        entityType: z.string().min(1),
+        oldValue: z.string().min(1),
+        newValue: z.string().trim().min(1).optional(),
+        synonyms: z.array(z.string().trim().min(1)).default([]),
+      }))
+      .mutation(({ input }) => incomeExpensesAdminRequest("PATCH", `/dialogflow/entity-types/${encodeURIComponent(input.entityType)}/entries/${encodeURIComponent(input.oldValue)}`, { newValue: input.newValue, synonyms: input.synonyms })),
     saveEntityEntry: adminProcedure
       .input(z.object({
         entityType: z.string().min(1),
