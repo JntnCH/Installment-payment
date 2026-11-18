@@ -47,7 +47,8 @@ import { listAuthIdentities } from "./db";
 import { createMonthlyBill, deleteMonthlyBill, listMonthlyBills, recordMonthlyBillPayment, updateMonthlyBill, uploadMonthlyBillReceipt } from "./monthlyBills";
 import { configureGoogleSpreadsheet, getGoogleSheetsStatus } from "./googleSheets";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { incomeExpensesAdminConfigured, incomeExpensesAdminRequest } from "./incomeExpensesAdmin";
 
 function isDemoId(id: unknown): boolean {
   return typeof id === "string" && id.startsWith("demo-");
@@ -97,6 +98,69 @@ function emptyStats(): DashboardStats {
 }
 
 export const appRouter = router({
+  systemSettings: router({
+    configured: adminProcedure.query(() => ({ configured: incomeExpensesAdminConfigured() })),
+    dialogflowStatus: adminProcedure.query(() =>
+      incomeExpensesAdminRequest("GET", "/dialogflow/status"),
+    ),
+    categories: adminProcedure.query(() =>
+      incomeExpensesAdminRequest("GET", "/"),
+    ),
+    saveCategory: adminProcedure
+      .input(z.object({
+        type: z.enum(["income", "expense"]),
+        name: z.string().trim().min(1).max(120),
+        synonyms: z.array(z.string().trim().min(1).max(120)).default([]),
+      }))
+      .mutation(({ input }) => incomeExpensesAdminRequest("POST", "/", input)),
+    deleteCategory: adminProcedure
+      .input(z.object({ type: z.enum(["income", "expense"]), name: z.string().min(1) }))
+      .mutation(({ input }) => incomeExpensesAdminRequest("DELETE", `/${input.type}/${encodeURIComponent(input.name)}`)),
+    intents: adminProcedure.query(() =>
+      incomeExpensesAdminRequest("GET", "/dialogflow/intents"),
+    ),
+    intent: adminProcedure
+      .input(z.object({ name: z.string().min(1) }))
+      .query(({ input }) => incomeExpensesAdminRequest("GET", `/dialogflow/intents/${encodeURIComponent(input.name)}`)),
+    createIntent: adminProcedure
+      .input(z.object({
+        displayName: z.string().trim().min(1).max(200),
+        trainingPhrases: z.array(z.string().trim().min(1)).default([]),
+        messages: z.array(z.string()).default([]),
+        webhookEnabled: z.boolean().default(true),
+      }))
+      .mutation(({ input }) => incomeExpensesAdminRequest("POST", "/dialogflow/intents", input)),
+    updateIntent: adminProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        updates: z.object({
+          displayName: z.string().optional(),
+          trainingPhrases: z.array(z.string()).optional(),
+          messages: z.array(z.string()).optional(),
+          webhookEnabled: z.boolean().optional(),
+        }),
+      }))
+      .mutation(({ input }) => incomeExpensesAdminRequest("PATCH", `/dialogflow/intents/${encodeURIComponent(input.name)}`, input.updates)),
+    deleteIntent: adminProcedure
+      .input(z.object({ name: z.string().min(1) }))
+      .mutation(({ input }) => incomeExpensesAdminRequest("DELETE", `/dialogflow/intents/${encodeURIComponent(input.name)}`)),
+    entityTypes: adminProcedure.query(() =>
+      incomeExpensesAdminRequest("GET", "/dialogflow/entity-types"),
+    ),
+    entityType: adminProcedure
+      .input(z.object({ name: z.string().min(1) }))
+      .query(({ input }) => incomeExpensesAdminRequest("GET", `/dialogflow/entity-types/${encodeURIComponent(input.name)}`)),
+    saveEntityEntry: adminProcedure
+      .input(z.object({
+        entityType: z.string().min(1),
+        value: z.string().trim().min(1).max(200),
+        synonyms: z.array(z.string().trim().min(1).max(200)).default([]),
+      }))
+      .mutation(({ input }) => incomeExpensesAdminRequest("POST", `/dialogflow/entity-types/${encodeURIComponent(input.entityType)}/entries`, { value: input.value, synonyms: input.synonyms })),
+    deleteEntityEntry: adminProcedure
+      .input(z.object({ entityType: z.string().min(1), value: z.string().min(1) }))
+      .mutation(({ input }) => incomeExpensesAdminRequest("DELETE", `/dialogflow/entity-types/${encodeURIComponent(input.entityType)}/entries/${encodeURIComponent(input.value)}`)),
+  }),
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
