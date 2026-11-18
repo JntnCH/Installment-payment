@@ -14,6 +14,7 @@ import {
   CreditCard,
   Layers,
   ShoppingBag,
+  Settings,
 } from "lucide-react";
 
 export type NavTabId =
@@ -25,7 +26,8 @@ export type NavTabId =
   | "lent"
   | "borrowed"
   | "calculator"
-  | "sheets";
+  | "sheets"
+  | "settings";
 
 export interface NavItem {
   id: NavTabId;
@@ -87,6 +89,12 @@ export const AppShell: React.FC<AppShellProps> = ({
       label: "ซิงก์ & จัดการข้อมูล",
       shortLabel: "ซิงก์ชีต",
       icon: FileSpreadsheet,
+    },
+    {
+      id: "settings",
+      label: "ตั้งค่าระบบ",
+      shortLabel: "ตั้งค่า",
+      icon: Settings,
     },
   ];
 
