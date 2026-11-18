@@ -45,10 +45,6 @@ export default function SystemSettings() {
     onSuccess: async () => { toast.success("ลบ Entity Type แล้ว"); setEntityTypeName(""); await utils.systemSettings.entityTypes.invalidate(); },
     onError: e => toast.error(e.message),
   });
-  const updateEntityEntry = trpc.systemSettings.updateEntityEntry.useMutation({
-    onSuccess: async () => { toast.success("แก้ไข Entity แล้ว"); await utils.systemSettings.entityTypes.invalidate(); await utils.systemSettings.entityType.invalidate(); },
-    onError: e => toast.error(e.message),
-  });
   const saveEntry = trpc.systemSettings.saveEntityEntry.useMutation({
     onSuccess: async () => { toast.success("บันทึก Entity แล้ว"); setNewValue(""); setNewSynonyms(""); await utils.systemSettings.entityTypes.invalidate(); await utils.systemSettings.entityType.invalidate(); },
     onError: e => toast.error(e.message),
