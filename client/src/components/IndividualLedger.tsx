@@ -359,7 +359,6 @@ export default function IndividualLedger({
         id: editContractForm.id,
         title: editContractForm.title.trim(),
         principal: parseFloat(editContractForm.principal) || 0,
-        downPayment: 0,
         interestRate: parseFloat(editContractForm.interestRate) || 0,
         installmentCount,
         startDate: editContractForm.startDate,
