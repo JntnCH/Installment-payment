@@ -405,7 +405,8 @@ export async function createLedgerContract(ownerId: number, input: ContractInput
   const now = new Date();
   const db = await getDb();
 
-  // Deduct the down payment from gross principal before calculating interest.
+  // Product installment contracts use a gross principal and deduct the down payment before interest.
+  // Debt/loan contracts now create with downPayment = 0.
   const downPayment = input.downPayment || 0;
   if (downPayment > input.principal) throw new Error("เงินดาวน์ต้องไม่เกินราคา/เงินต้นตามสัญญา");
   const totalCents = Math.round(((input.principal - downPayment) * (1 + (input.interestRate || 0) / 100)) * 100);
@@ -512,8 +513,17 @@ export async function updateLedgerContract(ownerId: number, input: ContractUpdat
   const interestRate = input.interestRate ?? asAmount(contract.interestRate);
   const downPayment = input.downPayment ?? asAmount(contract.downPayment);
   const installmentCount = input.installmentCount ?? contract.installmentCount;
-  if (downPayment > principal) throw new Error("เงินดาวน์ต้องไม่เกินราคา/เงินต้นตามสัญญา");
-  const totalCents = Math.round(((principal - downPayment) * (1 + interestRate / 100)) * 100);
+  // Product contracts are created with the "ผ่อน " title prefix. Keep legacy debt formulas unchanged.
+  const isProductInstallment = (input.title ?? contract.title).startsWith("ผ่อน ");
+  if (isProductInstallment && downPayment > principal) {
+    throw new Error("เงินดาวน์ต้องไม่เกินราคา/เงินต้นตามสัญญา");
+  }
+  if (!isProductInstallment && downPayment > principal * (1 + interestRate / 100)) {
+    throw new Error("เงินดาวน์ต้องไม่เกินยอดรวมสัญญา");
+  }
+  const totalCents = Math.round((isProductInstallment
+    ? (principal - downPayment) * (1 + interestRate / 100)
+    : principal * (1 + interestRate / 100) - downPayment) * 100);
   if (totalCents <= 0) throw new Error("ยอดเงินหลังหักเงินดาวน์ต้องมากกว่า 0 บาท");
 
   const db = await getDb();
