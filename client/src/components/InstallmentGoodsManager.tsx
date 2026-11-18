@@ -221,7 +221,7 @@ export default function InstallmentGoodsManager() {
 
   const openEditContract = () => {
     if (!contract) return;
-    const productName = contract.title.replace(/^ผ่อน\\s*/, "").replace(/\\s*\\(\\d+\\s*งวด.*\\)$/, "");
+    const productName = contract.title.replace(/^ผ่อน\s*/, "").replace(/\s*\(\d+\s*งวด.*\)$/, "");
     const dates = contractSchedules.map((item) => item.dueDate).filter(Boolean).sort();
     const intervalDays = dates.length > 1 ? Math.round((new Date(dates[1]).getTime() - new Date(dates[0]).getTime()) / 86400000) : 30;
     const frequency = intervalDays <= 9 ? "weekly" : intervalDays <= 20 ? "biweekly" : "monthly";
