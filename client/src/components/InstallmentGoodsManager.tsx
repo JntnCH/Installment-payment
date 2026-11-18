@@ -302,7 +302,7 @@ export default function InstallmentGoodsManager() {
             variant="primary"
             size="md"
             icon={<Plus className="w-4 h-4" />}
-            onClick={() => setCreateModalOpen(true)}
+            onClick={() => { setEditingContract(false); setCreateModalOpen(true); }}
           >
             + เพิ่มรายการผ่อนสินค้า
           </Button>
@@ -365,7 +365,7 @@ export default function InstallmentGoodsManager() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setCreateModalOpen(true)}
+                  onClick={() => { setEditingContract(false); setCreateModalOpen(true); }}
                   icon={<Plus className="w-3.5 h-3.5" />}
                 >
                   เพิ่มรายการผ่อนแรก
@@ -1031,7 +1031,7 @@ export default function InstallmentGoodsManager() {
                   variant="secondary"
                   size="md"
                   className="flex-1"
-                  onClick={() => setCreateModalOpen(false)}
+                  onClick={() => { setCreateModalOpen(false); setEditingContract(false); }}
                 >
                   ยกเลิก
                 </Button>
