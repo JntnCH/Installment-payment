@@ -104,7 +104,7 @@ export default function SystemSettings() {
           <span className={configQuery.data?.configured ? "text-emerald-700" : "text-amber-700"}>
             {configQuery.data?.configured ? "ตั้งค่า Backend แล้ว" : "ยังไม่ได้ตั้งค่า Backend"}
           </span>
-          {statusQuery.data && <span className="text-slate-500">• Dialogflow: {(statusQuery.data as any).connected ? "Connected" : "Disconnected"} • Project: {(statusQuery.data as any).projectId || "-"}</span>}
+          {Boolean(statusQuery.data) && <span className="text-slate-500">• Dialogflow: {(statusQuery.data as any).connected ? "Connected" : "Disconnected"} • Project: {(statusQuery.data as any).projectId || "-"}</span>}
           {configQuery.isLoading && <span className="text-slate-400">กำลังตรวจสอบ...</span>}
         </div>
         {!configQuery.data?.configured && !configQuery.isLoading && (
