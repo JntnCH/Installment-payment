@@ -15,6 +15,7 @@ export default function SystemSettings() {
   const [messagesText, setMessagesText] = useState("");
   const [webhookEnabled, setWebhookEnabled] = useState(true);
   const [entityTypeName, setEntityTypeName] = useState("");
+  const [newEntityType, setNewEntityType] = useState("");
   const [categoryType, setCategoryType] = useState<"income" | "expense">("expense");
 
   const utils = trpc.useUtils();
@@ -34,6 +35,18 @@ export default function SystemSettings() {
   });
   const deleteIntent = trpc.systemSettings.deleteIntent.useMutation({
     onSuccess: async () => { toast.success("ลบ Intent แล้ว"); setSelectedIntent(null); await utils.systemSettings.intents.invalidate(); },
+    onError: e => toast.error(e.message),
+  });
+  const createEntityType = trpc.systemSettings.createEntityType.useMutation({
+    onSuccess: async () => { toast.success("สร้าง Entity Type แล้ว"); setNewEntityType(""); await utils.systemSettings.entityTypes.invalidate(); },
+    onError: e => toast.error(e.message),
+  });
+  const deleteEntityType = trpc.systemSettings.deleteEntityType.useMutation({
+    onSuccess: async () => { toast.success("ลบ Entity Type แล้ว"); setEntityTypeName(""); await utils.systemSettings.entityTypes.invalidate(); },
+    onError: e => toast.error(e.message),
+  });
+  const updateEntityEntry = trpc.systemSettings.updateEntityEntry.useMutation({
+    onSuccess: async () => { toast.success("แก้ไข Entity แล้ว"); await utils.systemSettings.entityTypes.invalidate(); await utils.systemSettings.entityType.invalidate(); },
     onError: e => toast.error(e.message),
   });
   const saveEntry = trpc.systemSettings.saveEntityEntry.useMutation({
@@ -150,6 +163,10 @@ export default function SystemSettings() {
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,1fr)]">
           <section className="rounded-xl border bg-white p-4">
             <h2 className="font-semibold">Entity Types</h2>
+            <div className="mt-3 flex gap-2">
+              <input value={newEntityType} onChange={e => setNewEntityType(e.target.value)} placeholder="ชื่อ Entity Type ใหม่" className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm" />
+              <button disabled={!newEntityType.trim() || createEntityType.isPending} onClick={() => createEntityType.mutate({ displayName: newEntityType.trim(), entities: [] })} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50"><Plus className="h-4 w-4" /></button>
+            </div>
             <div className="mt-3 divide-y">
               {entityTypes.map((entity: any) => <button key={entity.name} onClick={() => setEntityTypeName(entity.name)} className={`block w-full py-3 text-left text-sm ${entityTypeName === entity.name ? "font-semibold text-blue-700" : "text-slate-700"}`}>
                 {entity.displayName} <span className="text-xs text-slate-400">({entity.entities?.length ?? 0})</span>
@@ -159,7 +176,10 @@ export default function SystemSettings() {
           </section>
           <section className="rounded-xl border bg-white p-4">
             <h2 className="font-semibold">Entity Entries</h2>
-            <p className="mt-1 break-all text-xs text-slate-500">{entityTypeName || "เลือก Entity Type"}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="mt-1 break-all text-xs text-slate-500">{entityTypeName || "เลือก Entity Type"}</p>
+              {entityTypeName && <button onClick={() => { if (window.confirm("ยืนยันลบ Entity Type นี้ทั้งชุด?")) deleteEntityType.mutate({ name: entityTypeName }); }} className="text-xs text-rose-600">ลบ Entity Type</button>}
+            </div>
             <div className="mt-3 space-y-2">
               <input value={newValue} onChange={e => setNewValue(e.target.value)} placeholder="ค่า Entity" className="w-full rounded-lg border px-3 py-2 text-sm" />
               <input value={newSynonyms} onChange={e => setNewSynonyms(e.target.value)} placeholder="คำพ้อง คั่นด้วยเครื่องหมายจุลภาค" className="w-full rounded-lg border px-3 py-2 text-sm" />
@@ -194,11 +214,24 @@ export default function SystemSettings() {
 function EntityEntries({ entityTypeName, onDelete }: { entityTypeName: string; onDelete: (value: string) => void }) {
   const query = trpc.systemSettings.entityType.useQuery({ name: entityTypeName }, { enabled: !!entityTypeName });
   const entries = (query.data as any)?.entityType?.entities ?? [];
+  const updateEntityEntry = trpc.systemSettings.updateEntityEntry.useMutation({
+    onSuccess: async () => { toast.success("แก้ไข Entity แล้ว"); await query.refetch(); },
+    onError: e => toast.error(e.message),
+  });
   if (!entityTypeName) return <p className="mt-4 text-sm text-slate-500">เลือก Entity Type เพื่อดูรายการ</p>;
   return <div className="mt-4 divide-y">
     {entries.map((entry: any) => <div key={entry.value} className="flex items-center justify-between gap-3 py-2">
       <div className="min-w-0"><div className="text-sm font-medium">{entry.value}</div><div className="truncate text-xs text-slate-500">{(entry.synonyms ?? []).join(", ")}</div></div>
-      <button onClick={() => { if (window.confirm(`ยืนยันลบ ${entry.value}?`)) onDelete(entry.value); }} className="rounded-md p-2 text-rose-600 hover:bg-rose-50"><Trash2 className="h-4 w-4" /></button>
+      <div className="flex shrink-0 gap-1">
+        <button title="แก้ไข Entry" onClick={() => {
+          const nextValue = window.prompt("ชื่อ Entity", entry.value);
+          if (nextValue === null || !nextValue.trim()) return;
+          const nextSynonyms = window.prompt("คำพ้อง คั่นด้วยเครื่องหมายจุลภาค", (entry.synonyms ?? []).join(", "));
+          if (nextSynonyms === null) return;
+          updateEntityEntry.mutate({ entityType: entityTypeName, oldValue: entry.value, newValue: nextValue.trim(), synonyms: nextSynonyms.split(",").map(v => v.trim()).filter(Boolean) });
+        }} className="rounded-md p-2 text-blue-600 hover:bg-blue-50"><Save className="h-4 w-4" /></button>
+        <button onClick={() => { if (window.confirm(`ยืนยันลบ ${entry.value}?`)) onDelete(entry.value); }} className="rounded-md p-2 text-rose-600 hover:bg-rose-50"><Trash2 className="h-4 w-4" /></button>
+      </div>
     </div>)}
   </div>;
 }
