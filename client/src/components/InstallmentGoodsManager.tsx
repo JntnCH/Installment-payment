@@ -679,6 +679,7 @@ export default function InstallmentGoodsManager() {
 
             <form onSubmit={editingContract ? handleUpdateInstallment : handleCreateInstallment} className="space-y-4">
               {!editingContract && (
+                <>
               {/* Store Selection */}
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-[#1C1917]">
@@ -744,6 +745,7 @@ export default function InstallmentGoodsManager() {
                 )}
               </div>
 
+                </>
               )}
 
               {/* Product Info */}
@@ -762,6 +764,7 @@ export default function InstallmentGoodsManager() {
               </div>
 
               {!editingContract && (
+                <>
               {/* Cycle Type Selection: 7 วัน, 15 วัน, 1 เดือน */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-[#1C1917]">
@@ -807,6 +810,7 @@ export default function InstallmentGoodsManager() {
                 </div>
               </div>
 
+                </>
               )}
 
               {/* Calculation Mode Selector */}
@@ -949,6 +953,7 @@ export default function InstallmentGoodsManager() {
               </div>
 
               {!editingContract && (
+                <>
               {/* Start Date */}
               <div>
                 <label className="block text-xs font-semibold text-[#1C1917] mb-1">
@@ -962,6 +967,7 @@ export default function InstallmentGoodsManager() {
                 />
               </div>
 
+                </>
               )}
 
               {/* Real-time Smart Calculation Summary Box */}
