@@ -1,7 +1,7 @@
 import axios, { type Method } from "axios";
 
-const baseUrl = () => process.env.INCOME_EXPENSES_API_URL?.replace(/\/+$/, "");
-const adminKey = () => process.env.INCOME_EXPENSES_ADMIN_API_KEY;
+const baseUrl = () => (process.env.INCOME_EXPENSES_API_URL || process.env.BACKEND_ADMIN_URL)?.replace(/\/+$/, "");
+const adminKey = () => process.env.INCOME_EXPENSES_ADMIN_API_KEY || process.env.BACKEND_ADMIN_API_KEY;
 
 export function incomeExpensesAdminConfigured() {
   return Boolean(baseUrl() && adminKey());
