@@ -110,7 +110,6 @@ export default function IndividualLedger({
   const [contractForm, setContractForm] = useState({
     title: "",
     principal: "",
-    deductionAmount: "0",
     interestRate: "0",
     installmentCount: "1",
     cycleType: "monthly" as "monthly" | "daily",
@@ -124,7 +123,6 @@ export default function IndividualLedger({
     title: "",
     principal: "",
     totalAmount: "0",
-    downPayment: "0",
     interestRate: "0",
     installmentCount: "1",
     startDate: "",
@@ -205,13 +203,11 @@ export default function IndividualLedger({
 
   // Form preview calculations for creating new contract
   const formPrincipal = Math.max(0, parseFloat(contractForm.principal) || 0);
-  const formDeduction = Math.max(0, parseFloat(contractForm.deductionAmount) || 0);
-  const formNetActual = Math.max(0, formPrincipal - formDeduction);
   const formRate = Math.max(0, parseFloat(contractForm.interestRate) || 0);
   const formCount = Math.max(1, parseInt(contractForm.installmentCount, 10) || 1);
   const formTotalInterest = Math.round(((formPrincipal * formRate) / 100) * 100) / 100;
   const formTotalRepay = Math.round((formPrincipal + formTotalInterest) * 100) / 100;
-  const formAmountToFinance = Math.max(0, Math.round((formTotalRepay - formDeduction) * 100) / 100);
+  const formAmountToFinance = formTotalRepay;
   const formPerInstallment = Math.round((formAmountToFinance / formCount) * 100) / 100;
 
   // Contract Financial Stats Breakdown (วงกลมตรงกลาง และการคำนวณยอดคงเหลือ)
@@ -224,7 +220,6 @@ export default function IndividualLedger({
     const totalRepayable = Math.round(schedules.reduce((sum, schedule) => sum + (schedule.status === "waived" ? 0 : Number(schedule.amount || 0)), 0) * 100) / 100;
     const interestAmount = Math.round((principal * Number(selectedContract.interestRate || 0) / 100) * 100) / 100;
     const grossTotal = Math.round((principal + interestAmount) * 100) / 100;
-    const downPayment = Math.max(0, Number(selectedContract.downPayment || 0));
     const totalPaid = Math.round(schedules.reduce((sum, schedule) => {
       if (schedule.status === "waived") return sum;
       const paidAmount = Number(schedule.paidAmount || 0);
@@ -238,13 +233,12 @@ export default function IndividualLedger({
       const actualPaid = paidAmount > 0 ? paidAmount : schedule.paidAt ? amount : 0;
       return sum + Math.max(0, amount - actualPaid);
     }, 0) * 100) / 100);
-    const paidCount = schedules.filter((schedule) => Boolean(schedule.paidAt)).length;
+    const paidCount = schedules.filter((schedule) => schedule.status === "paid" || Boolean(schedule.paidAt)).length;
     const totalCount = Number(selectedContract.installmentCount || schedules.length || 1);
     const progressPercent = totalRepayable > 0 ? Math.min(100, Math.round((totalPaid / totalRepayable) * 100)) : 0;
 
     return {
       principal,
-      downPayment,
       grossTotal,
       totalRepayable,
       totalPaid,
@@ -261,7 +255,7 @@ export default function IndividualLedger({
   const displayScheduleTransactions = useMemo(() => {
     if (!contractStats || scheduleTransactions.length === 0) return scheduleTransactions;
 
-    const unpaidSchedules = scheduleTransactions.filter((tx) => !tx.paidAt && tx.status !== "waived");
+    const unpaidSchedules = scheduleTransactions.filter((tx) => tx.status !== "paid" && tx.status !== "waived");
     if (unpaidSchedules.length === 0) return scheduleTransactions;
 
     let remainingCents = Math.max(0, Math.round(contractStats.remainingBalance * 100));
@@ -335,7 +329,6 @@ export default function IndividualLedger({
       title: c.title,
       principal: String(c.principal),
       totalAmount: String((Number(c.principal) * (1 + Number(c.interestRate || 0) / 100)).toFixed(2)),
-      downPayment: String(c.downPayment || 0),
       interestRate: String(c.interestRate || 0),
       installmentCount: String(c.installmentCount || 1),
       startDate: c.startDate || new Date().toISOString().slice(0, 10),
@@ -366,7 +359,7 @@ export default function IndividualLedger({
         id: editContractForm.id,
         title: editContractForm.title.trim(),
         principal: parseFloat(editContractForm.principal) || 0,
-        downPayment: parseFloat(editContractForm.downPayment) || 0,
+        downPayment: 0,
         interestRate: parseFloat(editContractForm.interestRate) || 0,
         installmentCount,
         startDate: editContractForm.startDate,
@@ -480,11 +473,6 @@ export default function IndividualLedger({
       toast.error("กรุณาระบุยอดเงินต้นที่ถูกต้อง");
       return;
     }
-    if (formDeduction > formTotalRepay) {
-      toast.error("เงินดาวน์ต้องไม่เกินยอดรวมเงินต้นและดอกเบี้ย");
-      return;
-    }
-
     const generatedSchedules = [];
     const [year, month, day] = contractForm.startDate.split("-").map(Number);
     for (let i = 1; i <= formCount; i++) {
@@ -506,15 +494,11 @@ export default function IndividualLedger({
     }
 
     try {
-      const noteDetails = formDeduction > 0
-        ? `[ยอดจริง] เงินต้น ฿${formPrincipal.toLocaleString()} หักเงินดาวน์ ฿${formDeduction.toLocaleString()} (${isDebtor ? "ให้ยืมจริง" : "ได้รับจริง"} ฿${formNetActual.toLocaleString()})`
-        : "";
-
       const res = await createContractMutation.mutateAsync({
         partyId: selectedPartyId,
-        title: contractForm.title.trim() + (noteDetails ? ` · ${noteDetails}` : ""),
+        title: contractForm.title.trim(),
         principal: formPrincipal,
-        downPayment: formDeduction,
+        downPayment: 0,
         interestRate: formRate,
         installmentCount: formCount,
         startDate: contractForm.startDate,
@@ -527,8 +511,7 @@ export default function IndividualLedger({
       setContractForm({
         title: "",
         principal: "",
-        deductionAmount: "0",
-        interestRate: "0",
+            interestRate: "0",
         installmentCount: "1",
         cycleType: "monthly",
         startDate: new Date().toISOString().slice(0, 10),
@@ -966,11 +949,7 @@ export default function IndividualLedger({
                           </div>
                         </div>
 
-                        <div className="p-3.5 bg-amber-500/10 rounded-[16px] border border-amber-500/20 text-center shadow-xs">
-                          <div className="text-[10px] text-amber-800 font-medium">เงินดาวน์</div>
-                          <div className="font-bold font-mono text-sm sm:text-base text-amber-700 mt-1">
-                            ฿{contractStats.downPayment.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                          </div>
+                        
                         </div>
 
                         {/* 4. Total Paid */}
@@ -1025,7 +1004,8 @@ export default function IndividualLedger({
                           {displayScheduleTransactions.map((tx) => {
                             const isSchedule = tx.type === "scheduled";
                             const isWaived = tx.status === "waived";
-                            const isSettled = Boolean(tx.paidAt) || isWaived;
+                            const isSettled = tx.status === "paid" || isWaived;
+                            const isPartial = isSchedule && !isSettled && Number(tx.paidAmount || 0) > 0;
                             const displayAmount = Number((tx as any).displayAmount ?? tx.amount ?? 0);
                             return (
                               <div
@@ -1049,6 +1029,7 @@ export default function IndividualLedger({
                                     <div className="text-[11px] text-[#78716C] mt-0.5">
                                       {tx.dueDate ? `กำหนดชำระ: ${tx.dueDate}` : `บันทึกเมื่อ: ${tx.paidAt?.slice(0, 10) || "—"}`}
                                     </div>
+                                    {isPartial && <div className="text-[11px] text-amber-700 font-medium mt-0.5">ชำระบางส่วน ฿{Number(tx.paidAmount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</div>}
                                   </div>
                                 </div>
 
@@ -1060,7 +1041,7 @@ export default function IndividualLedger({
                                   />
 
                                   {/* Edit Schedule Button (แก้งวด) */}
-                                  {isSchedule && !isSettled && (
+                                  {isSchedule && !isWaived && (
                                     <Button
                                       size="sm"
                                       variant="secondary"
@@ -1303,56 +1284,12 @@ export default function IndividualLedger({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                    ยอดเงินต้นตามสัญญา (บาท) *
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    min="1"
-                    required
-                    placeholder="เช่น 10000"
-                    value={contractForm.principal}
-                    onChange={(e) =>
-                      setContractForm({ ...contractForm, principal: e.target.value })
-                    }
-                    className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[12px] text-sm font-mono tabular-nums text-[#1C1917]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                    เงินดาวน์ (บาท)
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    placeholder="0"
-                    value={contractForm.deductionAmount}
-                    onChange={(e) =>
-                      setContractForm({ ...contractForm, deductionAmount: e.target.value })
-                    }
-                    className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[12px] text-sm font-mono tabular-nums text-[#1C1917]"
-                  />
-                </div>
-              </div>
-
-              {/* Net Actual Highlight */}
-              <div className="p-3.5 bg-emerald-500/10 rounded-[14px] border border-emerald-500/20 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-semibold text-emerald-900">
-                    {isDebtor ? "ยอดเงินที่ให้ยืมจริง (โอนจริง)" : "ยอดเงินที่ได้รับจริง (เข้ากระเป๋าจริง)"}
-                  </div>
-                  <div className="text-[11px] text-[#78716C]">
-                    เงินต้น ฿{formPrincipal.toLocaleString()} - หักล่วงหน้า ฿{formDeduction.toLocaleString()}
-                  </div>
-                </div>
-                <div className="text-lg font-bold font-mono text-[#16A34A]">
-                  ฿{formNetActual.toLocaleString()}
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-[#1C1917] mb-1">ยอดเงินต้นตามสัญญา (บาท) *</label>
+                <input type="number" step="any" min="1" required placeholder="เช่น 10000"
+                  value={contractForm.principal}
+                  onChange={(e) => setContractForm({ ...contractForm, principal: e.target.value })}
+                  className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[12px] text-sm font-mono tabular-nums text-[#1C1917]" />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
@@ -1549,19 +1486,6 @@ export default function IndividualLedger({
                     className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[12px] text-sm font-mono tabular-nums text-[#1C1917]"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                    เงินดาวน์ (บาท)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editContractForm.downPayment}
-                  onChange={(e) => setEditContractForm({ ...editContractForm, downPayment: e.target.value })}
-                  className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[12px] text-sm font-mono tabular-nums text-[#1C1917]"
-                />
-              </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
