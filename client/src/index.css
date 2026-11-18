@@ -3,21 +3,21 @@
 
 @layer base {
   :root {
-    --bg-paper: #F6F4F0;
-    --bg-card: #FFFCF8;
-    --text-ink: #1C1917;
-    --text-muted: #78716C;
-    --border-ink: rgba(28, 25, 23, 0.09);
-    --border-ink-strong: rgba(28, 25, 23, 0.16);
-    
+    --bg-paper: #F3F6FB;
+    --bg-card: #FFFFFF;
+    --text-ink: #172033;
+    --text-muted: #64748B;
+    --border-ink: rgba(23, 32, 51, 0.09);
+    --border-ink-strong: rgba(23, 32, 51, 0.16);
+
     /* Semantic Colors */
     --semantic-income: #16A34A;
-    --semantic-expense: #DC2626;
+    --semantic-expense: #E11D48;
     --semantic-due: #D97706;
     --semantic-settled: #64748B;
 
     --radius-sheet: 24px;
-    --radius-card: 20px;
+    --radius-card: 18px;
     --radius-btn: 12px;
     --radius-pill: 9999px;
   }
@@ -33,51 +33,68 @@
     padding: 0;
   }
 
-  /* Force uniform tabular numbers for all money and financial figures */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
+
+  button, input, select, textarea {
+    font: inherit;
+  }
+
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid #2563EB;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
-/* Tactile 3D & Embossed Utilities */
+/* Shared modern surface utilities */
 .tactile-card {
-  background: #FFFCF8;
-  border: 1px solid rgba(28, 25, 23, 0.09);
-  box-shadow: 0 4px 20px -2px rgba(28, 25, 23, 0.06), 0 2px 6px -1px rgba(28, 25, 23, 0.04);
-  border-radius: 20px;
-  transition: all 0.2s ease;
+  background: #FFFFFF;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  box-shadow: 0 4px 18px -4px rgba(23, 32, 51, 0.08), 0 1px 3px rgba(23, 32, 51, 0.04);
+  border-radius: 18px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .tactile-card:hover {
-  box-shadow: 0 10px 28px -4px rgba(28, 25, 23, 0.09), 0 4px 10px -2px rgba(28, 25, 23, 0.05);
+  border-color: rgba(37, 99, 235, 0.18);
+  box-shadow: 0 12px 28px -8px rgba(23, 32, 51, 0.14), 0 3px 8px rgba(23, 32, 51, 0.05);
 }
 
 .tactile-card-raised {
-  background: linear-gradient(180deg, #FFFFFF 0%, #FAF7F2 100%);
-  border: 1px solid rgba(28, 25, 23, 0.1);
-  box-shadow: 0 8px 30px -4px rgba(28, 25, 23, 0.08), 0 2px 8px -2px rgba(28, 25, 23, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  border-radius: 20px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+  border: 1px solid rgba(23, 32, 51, 0.09);
+  box-shadow: 0 8px 24px -8px rgba(23, 32, 51, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  border-radius: 18px;
 }
 
 .tactile-btn-primary {
-  background: linear-gradient(180deg, #2D2723 0%, #171412 100%);
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  transition: all 0.15s ease;
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+  border: 1px solid rgba(29, 78, 216, 0.35);
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.2);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .tactile-btn-primary:active {
   transform: translateY(1px);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.18);
 }
 
 .tactile-pill-active {
-  background: linear-gradient(180deg, #2C2622 0%, #171412 100%);
+  background: #2563EB;
   color: #FFFFFF;
-  box-shadow: 0 4px 12px rgba(28, 25, 23, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
 }
 
-/* Custom scrollbar matching warm paper theme */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -86,9 +103,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(28, 25, 23, 0.18);
+  background: rgba(100, 116, 139, 0.28);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(28, 25, 23, 0.3);
+  background: rgba(100, 116, 139, 0.48);
 }

@@ -17,15 +17,15 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
 }) => {
   return (
     <div
-      className={`flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-[#1C1917]/10 ${className}`}
+      className={`flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-slate-200/80 ${className}`}
     >
       <div className="space-y-1">
         {kicker && (
-          <div className="text-[11px] font-mono tracking-wider uppercase text-[#78716C]">
+          <div className="text-[11px] font-mono tracking-wider uppercase text-slate-500">
             {kicker}
           </div>
         )}
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#1C1917]">
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#172033]">
           {title}
         </h1>
         {description && (
