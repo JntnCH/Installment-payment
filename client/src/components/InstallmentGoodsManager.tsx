@@ -163,7 +163,8 @@ export default function InstallmentGoodsManager() {
       const res = await createContractMutation.mutateAsync({
         partyId,
         title: contractTitle,
-        principal: calcPreview.principal || calcPreview.totalRepayment,
+        principal: calcPreview.price + calcPreview.otherFees,
+        downPayment: calcPreview.downPayment,
         interestRate: calcPreview.ratePercent,
         installmentCount: calcPreview.schedules.length,
         startDate: form.startDate,
@@ -211,15 +212,26 @@ export default function InstallmentGoodsManager() {
   const contractStats = useMemo(() => {
     if (!contract) return null;
     const principal = Number(contract.principal || 0);
-    const totalRepayable = contractSchedules.reduce((sum, s) => sum + Number(s.amount || 0), 0) || principal;
-    const totalPaid = contractSchedules.filter((s) => Boolean(s.paidAt)).reduce((sum, s) => sum + Number(s.amount || 0), 0);
-    const remainingBalance = Math.max(0, totalRepayable - totalPaid);
-    const paidCount = contractSchedules.filter((s) => Boolean(s.paidAt)).length;
+    const downPayment = Number(contract.downPayment || 0);
+    const totalRepayable = contractSchedules.reduce((sum, s) => sum + (s.status === "waived" ? 0 : Number(s.amount || 0)), 0) || principal;
+    const totalPaid = contractSchedules.reduce((sum, s) => {
+      if (s.status === "waived") return sum;
+      const paid = Number(s.paidAmount || 0);
+      return sum + (paid > 0 ? paid : s.status === "paid" || s.paidAt ? Number(s.amount || 0) : 0);
+    }, 0);
+    const remainingBalance = contractSchedules.reduce((sum, s) => {
+      if (s.status === "waived") return sum;
+      const paid = Number(s.paidAmount || 0);
+      const actualPaid = paid > 0 ? paid : s.status === "paid" || s.paidAt ? Number(s.amount || 0) : 0;
+      return sum + Math.max(0, Number(s.amount || 0) - actualPaid);
+    }, 0);
+    const paidCount = contractSchedules.filter((s) => s.status === "paid" || Boolean(s.paidAt)).length;
     const totalCount = contractSchedules.length || contract.installmentCount || 1;
     const progressPercent = totalRepayable > 0 ? Math.min(100, Math.round((totalPaid / totalRepayable) * 100)) : 0;
 
     return {
       principal,
+      downPayment,
       totalRepayable,
       totalPaid,
       remainingBalance,
@@ -454,27 +466,31 @@ export default function InstallmentGoodsManager() {
                   </div>
 
                   {/* 5-Block Financial Breakdown for Product Installment */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     <div className="p-3 bg-white rounded-xl border border-[#1C1917]/10">
-                      <div className="text-[11px] text-[#78716C]">1. ยอดจัดสินเชื่อ</div>
+                      <div className="text-[11px] text-[#78716C]">1. ราคาสินค้าเต็ม</div>
                       <div className="font-mono font-bold text-sm text-[#1C1917]">
                         ฿{contractStats.principal.toLocaleString()}
                       </div>
                     </div>
+                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
+                      <div className="text-[11px] text-amber-700">2. เงินดาวน์</div>
+                      <div className="font-mono font-bold text-sm text-amber-800">฿{contractStats.downPayment.toLocaleString()}</div>
+                    </div>
                     <div className="p-3 bg-white rounded-xl border border-[#1C1917]/10">
-                      <div className="text-[11px] text-[#78716C]">2. ยอดรวมทั้งสัญญา</div>
+                      <div className="text-[11px] text-[#78716C]">3. ยอดรวมค่างวด</div>
                       <div className="font-mono font-bold text-sm text-[#1C1917]">
                         ฿{contractStats.totalRepayable.toLocaleString()}
                       </div>
                     </div>
                     <div className="p-3 bg-white rounded-xl border border-[#1C1917]/10">
-                      <div className="text-[11px] text-[#78716C]">3. ชำระแล้ว ({contractStats.paidCount}/{contractStats.totalCount} งวด)</div>
+                      <div className="text-[11px] text-[#78716C]">4. ชำระแล้ว ({contractStats.paidCount}/{contractStats.totalCount} งวด)</div>
                       <div className="font-mono font-bold text-sm text-emerald-600">
                         ฿{contractStats.totalPaid.toLocaleString()}
                       </div>
                     </div>
                     <div className="p-3 bg-rose-50 rounded-xl border border-rose-200">
-                      <div className="text-[11px] text-rose-700 font-semibold">4. ยอดคงเหลือต้องจ่าย</div>
+                      <div className="text-[11px] text-rose-700 font-semibold">5. ยอดคงเหลือต้องจ่าย</div>
                       <div className="font-mono font-bold text-base text-rose-700">
                         ฿{contractStats.remainingBalance.toLocaleString()}
                       </div>
