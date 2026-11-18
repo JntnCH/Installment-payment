@@ -813,6 +813,8 @@ export default function InstallmentGoodsManager() {
                 </>
               )}
 
+              {!editingContract && (
+                <>
               {/* Calculation Mode Selector */}
               <div className="p-3 bg-[#1C1917]/5 rounded-[12px] space-y-2">
                 <div className="flex items-center justify-between">
@@ -849,8 +851,12 @@ export default function InstallmentGoodsManager() {
                 </p>
               </div>
 
+                </>
+              )}
+
               {/* Installment Amount & Months */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className={editingContract ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
+                {!editingContract && (
                 <div>
                   <label className="block text-xs font-semibold text-[#1C1917] mb-1">
                     ค่างวด (บาท / {form.frequency === "weekly" ? "7 วัน" : form.frequency === "biweekly" ? "15 วัน" : "เดือน"}) {form.calcMode === "by_installment" ? "*" : ""}
@@ -865,6 +871,7 @@ export default function InstallmentGoodsManager() {
                     required={form.calcMode === "by_installment" && !form.itemPrice}
                   />
                 </div>
+                )}
                 <div>
                   <label className="block text-xs font-semibold text-[#1C1917] mb-1">
                     จำนวนงวด *
