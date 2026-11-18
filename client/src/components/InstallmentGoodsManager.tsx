@@ -33,6 +33,7 @@ export default function InstallmentGoodsManager() {
   const [selectedPartyId, setSelectedPartyId] = useState<string>("");
   const [selectedContractId, setSelectedContractId] = useState<string>("");
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingContract, setEditingContract] = useState(false);
   const [activePaySchedule, setActivePaySchedule] = useState<{
     scheduleId: string;
     amount: number;
@@ -82,6 +83,7 @@ export default function InstallmentGoodsManager() {
 
   const createPartyMutation = trpc.ledger.createParty.useMutation();
   const createContractMutation = trpc.ledger.createContract.useMutation();
+  const updateContractMutation = trpc.ledger.updateContract.useMutation();
   const deleteContractMutation = trpc.ledger.deleteContract.useMutation();
   const markPaidMutation = trpc.ledger.markSchedulePaid.useMutation();
 
@@ -189,6 +191,53 @@ export default function InstallmentGoodsManager() {
     }
   };
 
+  // Update product installment contract while preserving payment history.
+  const handleUpdateInstallment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contract) return;
+    const productName = form.productName.trim();
+    const principal = (parseFloat(form.itemPrice) || 0) + (parseFloat(form.otherFees) || 0);
+    const downPayment = parseFloat(form.downPayment) || 0;
+    const interestRate = parseFloat(form.interestRatePercent) || 0;
+    const installmentCount = Math.max(1, parseInt(form.installmentCount, 10) || 1);
+    if (!productName) return toast.error("กรุณาระบุชื่อสินค้า");
+    if (principal <= 0 || downPayment >= principal) return toast.error("กรุณาตรวจสอบราคาสินค้าและเงินดาวน์");
+    try {
+      const cycleLabel = form.frequency === "weekly" ? "ทุก 7 วัน" : form.frequency === "biweekly" ? "ทุก 15 วัน" : "รายเดือน";
+      await updateContractMutation.mutateAsync({
+        id: contract.contractId,
+        title: `ผ่อน ${productName} (${installmentCount} งวด · ${cycleLabel})`,
+        principal, downPayment, interestRate, installmentCount,
+      });
+      await Promise.all([contractQuery.refetch(), partyDetailQuery.refetch()]);
+      refreshProductLedger(selectedPartyId, contract.contractId);
+      toast.success("แก้ไขสัญญาผ่อนสินค้าเรียบร้อยแล้ว");
+      setCreateModalOpen(false);
+      setEditingContract(false);
+    } catch (err: any) {
+      toast.error(`แก้ไขสัญญาไม่สำเร็จ: ${err.message}`);
+    }
+  };
+
+  const openEditContract = () => {
+    if (!contract) return;
+    const productName = contract.title.replace(/^ผ่อน\s*/, "").replace(/\s*\(\d+\s*งวด.*\)$/, "");
+    const dates = contractSchedules.map((item) => item.dueDate).filter(Boolean).sort();
+    const intervalDays = dates.length > 1 ? Math.round((new Date(dates[1]).getTime() - new Date(dates[0]).getTime()) / 86400000) : 30;
+    const frequency = intervalDays <= 9 ? "weekly" : intervalDays <= 20 ? "biweekly" : "monthly";
+    setForm((previous) => ({
+      ...previous, partyType: "existing", existingPartyId: selectedPartyId,
+      productName: productName || contract.title, itemPrice: String(Number(contract.principal || 0)),
+      downPayment: String(Number(contract.downPayment || 0)), otherFees: "0",
+      interestRatePercent: String(Number(contract.interestRate || 0)), installmentAmount: "",
+      installmentCount: String(contract.installmentCount || contractSchedules.length || 1),
+      frequency, startDate: contract.startDate?.slice(0, 10) || previous.startDate,
+      calcMode: "by_price_rate",
+    }));
+    setEditingContract(true);
+    setCreateModalOpen(true);
+  };
+
   // Pay Schedule for Goods Installment (ลูกหนี้จ่ายค่างวดสินค้า -> จ่ายออก)
   const handleConfirmPay = async (data: { amount: number; date: string; note: string }) => {
     if (!activePaySchedule) return;
@@ -253,7 +302,7 @@ export default function InstallmentGoodsManager() {
             variant="primary"
             size="md"
             icon={<Plus className="w-4 h-4" />}
-            onClick={() => setCreateModalOpen(true)}
+            onClick={() => { setEditingContract(false); setCreateModalOpen(true); }}
           >
             + เพิ่มรายการผ่อนสินค้า
           </Button>
@@ -316,7 +365,7 @@ export default function InstallmentGoodsManager() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setCreateModalOpen(true)}
+                  onClick={() => { setEditingContract(false); setCreateModalOpen(true); }}
                   icon={<Plus className="w-3.5 h-3.5" />}
                 >
                   เพิ่มรายการผ่อนแรก
@@ -444,6 +493,15 @@ export default function InstallmentGoodsManager() {
                       </div>
                     </div>
 
+                    <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<Edit2 className="w-3.5 h-3.5" />}
+                      onClick={openEditContract}
+                    >
+                      แก้ไขสัญญา
+                    </Button>
                     <Button
                       variant="danger"
                       size="sm"
@@ -463,6 +521,7 @@ export default function InstallmentGoodsManager() {
                     >
                       ลบสัญญา
                     </Button>
+                    </div>
                   </div>
 
                   {/* 5-Block Financial Breakdown for Product Installment */}
@@ -600,25 +659,27 @@ export default function InstallmentGoodsManager() {
         </div>
       </div>
 
-      {/* Modal: Create Installment Contract */}
+      {/* Modal: Create / Edit Installment Contract */}
       {createModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-[#FFFCF8] rounded-[24px] border border-[#1C1917]/15 max-w-lg w-full p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-[#1C1917]/10">
               <div className="flex items-center gap-2">
                 <ShoppingBag className="w-5 h-5 text-[#1C1917]" />
-                <h3 className="font-bold text-base text-[#1C1917]">เพิ่มรายการผ่อนสินค้าใหม่</h3>
+                <h3 className="font-bold text-base text-[#1C1917]">{editingContract ? "แก้ไขสัญญาผ่อนสินค้า" : "เพิ่มรายการผ่อนสินค้าใหม่"}</h3>
               </div>
               <button
                 type="button"
-                onClick={() => setCreateModalOpen(false)}
+                onClick={() => { setCreateModalOpen(false); setEditingContract(false); }}
                 className="w-8 h-8 rounded-full bg-[#1C1917]/5 flex items-center justify-center text-[#78716C] hover:text-[#1C1917] cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreateInstallment} className="space-y-4">
+            <form onSubmit={editingContract ? handleUpdateInstallment : handleCreateInstallment} className="space-y-4">
+              {!editingContract && (
+                <>
               {/* Store Selection */}
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-[#1C1917]">
@@ -684,6 +745,9 @@ export default function InstallmentGoodsManager() {
                 )}
               </div>
 
+                </>
+              )}
+
               {/* Product Info */}
               <div>
                 <label className="block text-xs font-semibold text-[#1C1917] mb-1">
@@ -699,6 +763,8 @@ export default function InstallmentGoodsManager() {
                 />
               </div>
 
+              {!editingContract && (
+                <>
               {/* Cycle Type Selection: 7 วัน, 15 วัน, 1 เดือน */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-[#1C1917]">
@@ -744,6 +810,11 @@ export default function InstallmentGoodsManager() {
                 </div>
               </div>
 
+                </>
+              )}
+
+              {!editingContract && (
+                <>
               {/* Calculation Mode Selector */}
               <div className="p-3 bg-[#1C1917]/5 rounded-[12px] space-y-2">
                 <div className="flex items-center justify-between">
@@ -780,8 +851,12 @@ export default function InstallmentGoodsManager() {
                 </p>
               </div>
 
+                </>
+              )}
+
               {/* Installment Amount & Months */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className={editingContract ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
+                {!editingContract && (
                 <div>
                   <label className="block text-xs font-semibold text-[#1C1917] mb-1">
                     ค่างวด (บาท / {form.frequency === "weekly" ? "7 วัน" : form.frequency === "biweekly" ? "15 วัน" : "เดือน"}) {form.calcMode === "by_installment" ? "*" : ""}
@@ -796,6 +871,7 @@ export default function InstallmentGoodsManager() {
                     required={form.calcMode === "by_installment" && !form.itemPrice}
                   />
                 </div>
+                )}
                 <div>
                   <label className="block text-xs font-semibold text-[#1C1917] mb-1">
                     จำนวนงวด *
@@ -883,6 +959,8 @@ export default function InstallmentGoodsManager() {
                 </div>
               </div>
 
+              {!editingContract && (
+                <>
               {/* Start Date */}
               <div>
                 <label className="block text-xs font-semibold text-[#1C1917] mb-1">
@@ -895,6 +973,9 @@ export default function InstallmentGoodsManager() {
                   className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-xs text-[#1C1917]"
                 />
               </div>
+
+                </>
+              )}
 
               {/* Real-time Smart Calculation Summary Box */}
               <div className="p-4 bg-[#FAF8F5] rounded-xl border border-[#1C1917]/10 space-y-2">
@@ -963,7 +1044,7 @@ export default function InstallmentGoodsManager() {
                   variant="secondary"
                   size="md"
                   className="flex-1"
-                  onClick={() => setCreateModalOpen(false)}
+                  onClick={() => { setCreateModalOpen(false); setEditingContract(false); }}
                 >
                   ยกเลิก
                 </Button>
@@ -972,10 +1053,10 @@ export default function InstallmentGoodsManager() {
                   variant="primary"
                   size="md"
                   className="flex-1"
-                  loading={createContractMutation.isPending || createPartyMutation.isPending}
+                  loading={editingContract ? updateContractMutation.isPending : createContractMutation.isPending || createPartyMutation.isPending}
                   icon={<CheckCircle2 className="w-4 h-4" />}
                 >
-                  บันทึกสัญญาผ่อนสินค้า
+                  {editingContract ? "บันทึกการแก้ไขสัญญา" : "บันทึกสัญญาผ่อนสินค้า"}
                 </Button>
               </div>
             </form>
