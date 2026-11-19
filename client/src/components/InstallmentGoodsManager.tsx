@@ -86,6 +86,7 @@ export default function InstallmentGoodsManager() {
   const updateContractMutation = trpc.ledger.updateContract.useMutation();
   const deleteContractMutation = trpc.ledger.deleteContract.useMutation();
   const markPaidMutation = trpc.ledger.markSchedulePaid.useMutation();
+  const uploadReceiptMutation = trpc.ledger.uploadReceipt.useMutation();
 
   const parties = partiesQuery.data || [];
   const selectedContractData = contractQuery.data;
@@ -239,13 +240,18 @@ export default function InstallmentGoodsManager() {
   };
 
   // Pay Schedule for Goods Installment (ลูกหนี้จ่ายค่างวดสินค้า -> จ่ายออก)
-  const handleConfirmPay = async (data: { amount: number; date: string; note: string }) => {
+  const handleConfirmPay = async (data: { amount: number; date: string; note: string; receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string } }) => {
     if (!activePaySchedule) return;
     try {
+      const uploaded = data.receipt ? await uploadReceiptMutation.mutateAsync({
+        scheduleId: activePaySchedule.scheduleId, paidDate: data.date,
+        fileName: data.receipt.fileName, mimeType: data.receipt.mimeType, base64: data.receipt.base64,
+      }) : null;
       await markPaidMutation.mutateAsync({
         scheduleId: activePaySchedule.scheduleId,
         paidAmount: data.amount,
         paidAt: new Date(data.date),
+        receiptKey: uploaded?.receiptKey,
         source: "ledger_debtor_payment",
         note: data.note || `จ่ายค่างวดผ่อนสินค้า ${activePaySchedule.contractTitle} งวดที่ ${activePaySchedule.installmentNo} (จ่ายออก)`,
       });
