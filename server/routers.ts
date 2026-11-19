@@ -343,7 +343,7 @@ export const appRouter = router({
     uploadReceipt: protectedProcedure
       .input(z.object({
         scheduleId: z.string().min(1).max(64),
-        paidDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+        paidDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         fileName: z.string().min(1).max(180),
         mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
         base64: z.string().min(1).max(11_184_812),
