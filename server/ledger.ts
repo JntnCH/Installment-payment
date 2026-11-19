@@ -850,7 +850,7 @@ export async function uploadLedgerReceipt(
 ) {
   const db = await getDb();
   if (db) {
-    const [schedule] = await db.select({ id: contractPaymentSchedules.id })
+    const [schedule] = await db.select({ id: contractPaymentSchedules.id, status: contractPaymentSchedules.status })
       .from(contractPaymentSchedules)
       .where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.id, scheduleId)))
       .limit(1);
