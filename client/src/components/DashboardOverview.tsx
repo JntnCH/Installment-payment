@@ -66,6 +66,7 @@ export default function DashboardOverview({
 }: DashboardOverviewProps) {
   const statsQuery = trpc.ledger.getStats.useQuery();
   const markPaidMutation = trpc.ledger.markSchedulePaid.useMutation();
+  const uploadReceiptMutation = trpc.ledger.uploadReceipt.useMutation();
   const utils = trpc.useUtils();
 
   const [activePayItem, setActivePayItem] = useState<{
@@ -81,13 +82,19 @@ export default function DashboardOverview({
     amount: number;
     date: string;
     note: string;
+    receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string };
   }) => {
     if (!activePayItem) return;
     try {
+      const uploaded = data.receipt ? await uploadReceiptMutation.mutateAsync({
+        scheduleId: activePayItem.scheduleId, paidDate: data.date,
+        fileName: data.receipt.fileName, mimeType: data.receipt.mimeType, base64: data.receipt.base64,
+      }) : null;
       await markPaidMutation.mutateAsync({
         scheduleId: activePayItem.scheduleId,
         paidAmount: data.amount,
         paidAt: new Date(data.date),
+        receiptKey: uploaded?.receiptKey,
         source: "command_center",
         note: data.note || `รับชำระจากหน้าแรก: ${activePayItem.title}`,
       });
