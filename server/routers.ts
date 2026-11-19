@@ -40,7 +40,6 @@ import {
   createSheetsTransaction,
   getSheetsBalance,
   listSheetsTransactions,
-  sheetsProxyConfigured,
 } from "./sheetsProxy";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { listAuthIdentities } from "./db";
@@ -192,13 +191,10 @@ export const appRouter = router({
     }),
   }),
   sheets: router({
-    configured: publicProcedure.query(() => ({
-      configured: sheetsProxyConfigured(),
-      source: "google-sheets" as const,
-    })),
-    getBalance: protectedProcedure.query(async () => {
+    configured: protectedProcedure.query(({ ctx }) => getGoogleSheetsStatus(ctx.user.id)),
+    getBalance: protectedProcedure.query(async ({ ctx }) => {
       try {
-        return await getSheetsBalance();
+        return await getSheetsBalance(ctx.user.id);
       } catch (err) {
         throw new TRPCError({
           code: "BAD_GATEWAY",
@@ -208,9 +204,9 @@ export const appRouter = router({
     }),
     listTransactions: protectedProcedure
       .input(z.object({ limit: z.number().min(1).max(500).optional() }).optional())
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         try {
-          return await listSheetsTransactions(input?.limit ?? 100);
+          return await listSheetsTransactions(ctx.user.id, input?.limit ?? 100);
         } catch (err) {
           throw new TRPCError({
             code: "BAD_GATEWAY",
@@ -229,11 +225,15 @@ export const appRouter = router({
           recorderName: z.string().optional(),
           channel: z.string().optional(),
           note: z.string().optional(),
+          date: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(),
+          fileName: z.string().max(180).optional(),
+          mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]).optional(),
+          base64: z.string().max(11_184_812).optional(),
         }),
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         try {
-          return await createSheetsTransaction(input);
+          return await createSheetsTransaction(ctx.user.id, input);
         } catch (err) {
           throw new TRPCError({
             code: "BAD_GATEWAY",
