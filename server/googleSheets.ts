@@ -46,7 +46,7 @@ export async function saveGoogleRefreshToken(userId: number, refreshToken: strin
       userId,
       refreshTokenEncrypted: encrypt(refreshToken),
       connectedEmail: email ?? null,
-      spreadsheetId: ENV.googleSpreadsheetId || null,
+      spreadsheetId: null,
     });
   }
 }
