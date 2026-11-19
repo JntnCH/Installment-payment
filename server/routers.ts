@@ -35,6 +35,7 @@ import {
   updateLedgerParty,
   updateLedgerSchedule,
   updateLedgerTransaction,
+  uploadLedgerReceipt,
 } from "./ledger";
 import {
   createSheetsTransaction,
@@ -339,6 +340,17 @@ export const appRouter = router({
       .mutation(({ ctx, input }) =>
         createLedgerTransaction(ctx.user.id, input),
       ),
+    uploadReceipt: protectedProcedure
+      .input(z.object({
+        scheduleId: z.string().min(1).max(64),
+        paidDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+        fileName: z.string().min(1).max(180),
+        mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
+        base64: z.string().min(1).max(11_184_812),
+      }))
+      .mutation(({ ctx, input }) => uploadLedgerReceipt(
+        ctx.user.id, input.scheduleId, input.paidDate, input.fileName, input.mimeType, input.base64,
+      )),
     markSchedulePaid: protectedProcedure
       .input(schedulePaymentInputSchema)
       .mutation(({ ctx, input }) => markSchedulePaid(ctx.user.id, input)),
