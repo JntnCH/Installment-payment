@@ -852,7 +852,7 @@ export async function uploadLedgerReceipt(
     const schedule = memorySchedules.get(scheduleId);
     if (!schedule || schedule.ownerId !== ownerId) throw new Error("ไม่พบงวดชำระที่เลือก");
   }
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(paidDate)) throw new Error("วันที่ชำระไม่ถูกต้อง");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidDate)) throw new Error("วันที่ชำระไม่ถูกต้อง");
   const buffer = Buffer.from(base64, "base64");
   if (!buffer.length || buffer.length > 8 * 1024 * 1024) throw new Error("ไฟล์หลักฐานต้องมีขนาดไม่เกิน 8 MB");
   const uploaded = await uploadReceiptToGoogleDrive(ownerId, paidDate, fileName, mimeType, buffer);
