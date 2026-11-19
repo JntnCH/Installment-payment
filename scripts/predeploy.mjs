@@ -4,6 +4,7 @@ const scripts = [
   "scripts/ensure-auth-identities.mjs",
   "scripts/ensure-monthly-bills.mjs",
   "scripts/ensure-contract-down-payment.mjs",
+  "scripts/ensure-ledger-transaction-receipt.mjs",
 ];
 
 for (const script of scripts) {
