@@ -854,10 +854,10 @@ export async function uploadLedgerReceipt(
       .from(contractPaymentSchedules)
       .where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.id, scheduleId)))
       .limit(1);
-    if (!schedule) throw new Error("ไม่พบงวดชำระที่เลือก");
+    if (!schedule || schedule.status !== "pending") throw new Error("ไม่พบงวดที่ยังเปิดให้ชำระ");
   } else {
     const schedule = memorySchedules.get(scheduleId);
-    if (!schedule || schedule.ownerId !== ownerId) throw new Error("ไม่พบงวดชำระที่เลือก");
+    if (!schedule || schedule.ownerId !== ownerId || schedule.status !== "pending") throw new Error("ไม่พบงวดที่ยังเปิดให้ชำระ");
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(paidDate)) throw new Error("วันที่ชำระไม่ถูกต้อง");
   const buffer = Buffer.from(base64, "base64");
