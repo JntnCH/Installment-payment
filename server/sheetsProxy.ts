@@ -75,7 +75,7 @@ export async function getSheetsBalance(userId: number): Promise<SheetsBalance> {
 
 export async function listSheetsTransactions(userId: number, limit = 100): Promise<SheetsTransactions> {
   const { token, spreadsheetId } = await getConnection(userId);
-  const range = encodeURIComponent(`'${TRANSACTION_TAB}'!A2:J`);
+  const range = encodeURIComponent(`'${TRANSACTION_TAB}'!A2:K`);
   const result = await sheetsRequest<{ values?: unknown[][] }>(
     token, "GET", `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}`,
   );
@@ -91,6 +91,7 @@ export async function listSheetsTransactions(userId: number, limit = 100): Promi
     recorder: String(row[7] ?? ""),
     transactionId: String(row[8] ?? `sheet-row-${index + 2}`),
     ...(row[9] ? { receiptUrl: String(row[9]) } : {}),
+    note: String(row[10] ?? ""),
   })).filter(row => row.date || row.item || row.amount);
   const recent = data.slice(-Math.max(1, Math.min(500, limit))).reverse();
   return { source: "google-sheets", count: recent.length, data: recent };
@@ -120,19 +121,20 @@ export async function createSheetsTransaction(userId: number, input: {
   const row = [
     dateLabel, type, input.item?.trim() || "ไม่ระบุรายการ", input.amount,
     input.category || "ทั่วไป", input.account || "เงินสด", input.channel || "Installment Web",
-    input.recorderName || "Web", transactionId, receiptUrl,
+    input.recorderName || "Web", transactionId, receiptUrl, input.note || "",
   ];
-  const headerCell = encodeURIComponent(`'${TRANSACTION_TAB}'!J1`);
+  const headerCell = encodeURIComponent(`'${TRANSACTION_TAB}'!J1:K1`);
   const header = await sheetsRequest<{ values?: unknown[][] }>(
     token, "GET", `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${headerCell}`,
   );
-  if (!header.values?.[0]?.[0]) {
+  const headerValues = header.values?.[0] ?? [];
+  if (!headerValues[0] || !headerValues[1]) {
     await sheetsRequest(token, "PUT",
       `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${headerCell}?valueInputOption=RAW`,
-      { values: [["หลักฐานการชำระ"]] },
+      { values: [[headerValues[0] || "หลักฐานการชำระ", headerValues[1] || "หมายเหตุ"]] },
     );
   }
-  const range = encodeURIComponent(`'${TRANSACTION_TAB}'!A:J`);
+  const range = encodeURIComponent(`'${TRANSACTION_TAB}'!A:K`);
   await sheetsRequest(token, "POST",
     `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     { values: [row] },
