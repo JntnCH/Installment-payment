@@ -622,10 +622,12 @@ export default function InstallmentGoodsManager() {
                                   ฿{Number(s.amount).toLocaleString()}
                                 </div>
                                 {isPaid && (
-                                  <span className="text-[10px] text-emerald-600 font-semibold">
-                                    ✓ บันทึกจ่ายออกแล้ว
-                                  </span>
-                                  {s.receiptKey && <a href={`/manus-storage/${s.receiptKey}`} target="_blank" rel="noreferrer" className="block text-[10px] text-blue-700 underline mt-1">ดูสลิป / หลักฐาน</a>}
+                                  <div>
+                                    <span className="text-[10px] text-emerald-600 font-semibold">
+                                      ✓ บันทึกจ่ายออกแล้ว
+                                    </span>
+                                    {s.receiptKey && <a href={`/manus-storage/${s.receiptKey}`} target="_blank" rel="noreferrer" className="block text-[10px] text-blue-700 underline mt-1">ดูสลิป / หลักฐาน</a>}
+                                  </div>
                                 )}
                               </div>
 
