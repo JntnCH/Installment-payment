@@ -1034,6 +1034,7 @@ export default function IndividualLedger({
                                       {tx.dueDate ? `กำหนดชำระ: ${tx.dueDate}` : `บันทึกเมื่อ: ${tx.paidAt?.slice(0, 10) || "—"}`}
                                     </div>
                                     {isPartial && <div className="text-[11px] text-amber-700 font-medium mt-0.5">ชำระบางส่วน ฿{Number(tx.paidAmount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</div>}
+                                    {tx.receiptKey && <a href={`/manus-storage/${tx.receiptKey}`} target="_blank" rel="noreferrer" className="text-[11px] text-blue-700 underline mt-1 inline-block">ดูสลิป / หลักฐาน</a>}
                                   </div>
                                 </div>
 
