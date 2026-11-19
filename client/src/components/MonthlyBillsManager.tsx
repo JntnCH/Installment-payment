@@ -97,7 +97,7 @@ export default function MonthlyBillsManager() {
             บันทึก Spreadsheet
           </button>
         </div>}
-        {sheetsStatus.data?.configured && <p className="text-xs text-emerald-700">ใช้ Spreadsheet ID จาก Environment Variable: GOOGLE_SPREADSHEET_ID</p>}
+        {sheetsStatus.data?.configured && <p className="text-xs text-emerald-700">ใช้ Spreadsheet ID ที่กำหนดไว้สำหรับบัญชี Google นี้</p>}
         <p className="text-xs text-stone-500">ระบบจะซิงก์อัตโนมัติทุกครั้งที่เพิ่ม แก้ไข ลบ หรือเปลี่ยนสถานะ และจะลองใหม่เมื่อ Google Sheets ใช้งานไม่ได้</p>
       </div>}
     </section>
