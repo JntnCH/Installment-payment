@@ -177,6 +177,7 @@ export default function IndividualLedger({
 
   const updateScheduleMutation = trpc.ledger.updateSchedule.useMutation();
   const markPaidMutation = trpc.ledger.markSchedulePaid.useMutation();
+  const uploadReceiptMutation = trpc.ledger.uploadReceipt.useMutation();
 
   const rawParties = partyListQuery.data || [];
   const selectedParty = partyQuery.data?.party;
@@ -528,13 +529,19 @@ export default function IndividualLedger({
     amount: number;
     date: string;
     note: string;
+    receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string };
   }) => {
     if (!activePaySchedule) return;
     try {
+      const uploaded = data.receipt ? await uploadReceiptMutation.mutateAsync({
+        scheduleId: activePaySchedule.scheduleId, paidDate: data.date,
+        fileName: data.receipt.fileName, mimeType: data.receipt.mimeType, base64: data.receipt.base64,
+      }) : null;
       await markPaidMutation.mutateAsync({
         scheduleId: activePaySchedule.scheduleId,
         paidAmount: data.amount,
         paidAt: new Date(data.date),
+        receiptKey: uploaded?.receiptKey,
         source: isDebtor ? "ledger_creditor_collection" : "ledger_debtor_payment",
         note: data.note || (isDebtor ? `รับชำระงวดที่ ${activePaySchedule.installmentNo} (รับเข้า)` : `จ่ายชำระเงินกู้ยืมงวดที่ ${activePaySchedule.installmentNo} (จ่ายออก)`),
       });
