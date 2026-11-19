@@ -78,6 +78,7 @@ function toScheduleTransaction(row: ScheduleRow) {
     paidAt: asTimestamp(row.paidAt),
     source: "database:schedule",
     note: row.note ?? `งวดที่ ${row.installmentNo}`,
+    receiptKey: "",
   };
 }
 
@@ -263,7 +264,10 @@ export async function getContractLedger(ownerId: number, contractId: string) {
     return {
       party: party ? toParty(party) : null,
       contract: toContract(contract),
-      transactions: [...schedules.map(toScheduleTransaction), ...transactionRows.map(toLedgerTransaction)],
+      transactions: [...schedules.map(schedule => ({
+        ...toScheduleTransaction(schedule),
+        receiptKey: transactionRows.find(tx => tx.scheduleId === schedule.id && tx.receiptKey)?.receiptKey ?? "",
+      })), ...transactionRows.map(toLedgerTransaction)],
     };
   }
   const schedules: ScheduleRow[] = [];
@@ -285,7 +289,10 @@ export async function getContractLedger(ownerId: number, contractId: string) {
   return {
     party: party ? toParty(party) : null,
     contract: toContract(contract),
-    transactions: [...schedules.map(toScheduleTransaction), ...transactionRows.map(toLedgerTransaction)],
+    transactions: [...schedules.map(schedule => ({
+      ...toScheduleTransaction(schedule),
+      receiptKey: transactionRows.find(tx => tx.scheduleId === schedule.id && tx.receiptKey)?.receiptKey ?? "",
+    })), ...transactionRows.map(toLedgerTransaction)],
   };
 }
 
