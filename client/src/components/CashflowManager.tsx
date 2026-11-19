@@ -19,6 +19,7 @@ type SheetTx = {
   platform?: string;
   recorder?: string;
   transactionId?: string;
+  receiptUrl?: string;
 };
 
 function isIncome(type?: string) {
@@ -35,11 +36,16 @@ export default function CashflowManager() {
     { retry: 1 },
   );
   const createSheetsTx = trpc.sheets.createTransaction.useMutation();
+  const googleStatus = trpc.monthlyBills.googleStatus.useQuery();
+  const configureSheets = trpc.monthlyBills.configureGoogleSpreadsheet.useMutation();
   const utils = trpc.useUtils();
 
   const [filterType, setFilterType] = useState<"all" | "in" | "out">("all");
   const [modalOpen, setModalOpen] = useState(false);
+  const [spreadsheetId, setSpreadsheetId] = useState("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [txForm, setTxForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
     type: "รายรับ" as "รายรับ" | "รายจ่าย",
     item: "",
     amount: "",
@@ -99,7 +105,20 @@ export default function CashflowManager() {
       return;
     }
     try {
+      let base64: string | undefined;
+      if (receiptFile) {
+        if (receiptFile.size > 8 * 1024 * 1024) throw new Error("ไฟล์หลักฐานต้องมีขนาดไม่เกิน 8 MB");
+        if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(receiptFile.type)) throw new Error("รองรับ JPG, PNG, WEBP หรือ PDF เท่านั้น");
+        base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+          reader.onerror = () => reject(new Error("อ่านไฟล์หลักฐานไม่สำเร็จ"));
+          reader.readAsDataURL(receiptFile);
+        });
+      }
       await createSheetsTx.mutateAsync({
+        date: txForm.date,
+        ...(receiptFile ? { fileName: receiptFile.name, mimeType: receiptFile.type as "image/jpeg" | "image/png" | "image/webp" | "application/pdf", base64 } : {}),
         type: txForm.type,
         item: txForm.item.trim(),
         amount: numAmount,
@@ -115,12 +134,14 @@ export default function CashflowManager() {
       toast.success("บันทึกลง Google Sheets เรียบร้อย");
       setModalOpen(false);
       setTxForm({
+        date: new Date().toISOString().slice(0, 10),
         type: "รายรับ",
         item: "",
         amount: "",
         account: "เงินสด",
         note: "",
       });
+      setReceiptFile(null);
     } catch (err: any) {
       toast.error(`บันทึกไม่สำเร็จ: ${err.message}`);
     }
@@ -147,6 +168,34 @@ export default function CashflowManager() {
           </Button>
         }
       />
+
+      <section className="rounded-2xl border border-[#1C1917]/10 bg-[#FFFCF8] p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="font-semibold text-sm">เชื่อมต่อ Google Sheets ส่วนตัว</div>
+            <p className="text-xs text-[#78716C] mt-1">
+              {googleStatus.data?.connected ? `เชื่อมต่อแล้ว · ${googleStatus.data.connectedEmail || "Google account"}` : "ยังไม่ได้เชื่อมต่อบัญชี Google"}
+              {googleStatus.data?.configured ? " · พร้อมใช้งาน" : " · กรุณาระบุ Spreadsheet ID"}
+            </p>
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={() => window.location.assign("/api/auth/google?intent=link")}>
+            {googleStatus.data?.connected ? "เชื่อมต่อ Google ใหม่" : "เชื่อมต่อ Google"}
+          </Button>
+        </div>
+        {!googleStatus.data?.configured && <div className="flex flex-col sm:flex-row gap-2">
+          <input value={spreadsheetId} onChange={event => setSpreadsheetId(event.target.value)} placeholder="วาง Google Spreadsheet ID" className="min-w-0 flex-1 h-10 px-3 border border-[#1C1917]/15 rounded-[10px] text-sm" />
+          <Button type="button" size="sm" disabled={!googleStatus.data?.connected || configureSheets.isPending || spreadsheetId.trim().length < 10} onClick={async () => {
+            try {
+              await configureSheets.mutateAsync({ spreadsheetId: spreadsheetId.trim() });
+              await Promise.all([utils.monthlyBills.googleStatus.invalidate(), utils.sheets.getBalance.invalidate(), utils.sheets.listTransactions.invalidate()]);
+              toast.success("เชื่อมต่อ Spreadsheet เรียบร้อย");
+            } catch (error) { toast.error(error instanceof Error ? error.message : "ตั้งค่า Spreadsheet ไม่สำเร็จ"); }
+          }}>
+            {configureSheets.isPending ? "กำลังตรวจสอบ..." : "บันทึก Spreadsheet"}
+          </Button>
+        </div>}
+        <p className="text-[11px] text-[#78716C]">ใช้สิทธิ์ Google ของบัญชีที่เชื่อมต่อเท่านั้น ไม่ใช้ Spreadsheet ร่วมระหว่างผู้ใช้</p>
+      </section>
 
       {errorMsg ? (
         <div className="rounded-2xl border border-[#A33B2B]/30 bg-[#A33B2B]/5 p-4 text-sm text-[#A33B2B]">
@@ -260,6 +309,7 @@ export default function CashflowManager() {
                           <p className="text-xs text-[#78716C] truncate">
                             {tx.account || "-"} · {tx.platform || "Sheets"}
                           </p>
+                          {tx.receiptUrl && <a href={tx.receiptUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-700 underline">ดูสลิป / หลักฐาน</a>}
                         </div>
                       </div>
                       <Money
@@ -334,6 +384,15 @@ export default function CashflowManager() {
                 onChange={(e) => setTxForm({ ...txForm, account: e.target.value })}
                 className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm"
               />
+              <label className="block text-xs text-[#1C1917] space-y-1">
+                <span>วันที่ทำรายการ</span>
+                <input type="date" required value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm" />
+              </label>
+              <label className="block text-xs text-[#1C1917] space-y-1">
+                <span>แนบสลิป / หลักฐาน (ไม่บังคับ)</span>
+                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} className="w-full text-xs" />
+                <span className="text-[11px] text-[#78716C]">{receiptFile ? `${receiptFile.name} · ${(receiptFile.size / 1024 / 1024).toFixed(2)} MB` : "JPG, PNG, WEBP หรือ PDF ไม่เกิน 8 MB"}</span>
+              </label>
               <input
                 placeholder="หมายเหตุ"
                 value={txForm.note}

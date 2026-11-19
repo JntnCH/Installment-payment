@@ -46,7 +46,7 @@ export async function saveGoogleRefreshToken(userId: number, refreshToken: strin
       userId,
       refreshTokenEncrypted: encrypt(refreshToken),
       connectedEmail: email ?? null,
-      spreadsheetId: ENV.googleSpreadsheetId || null,
+      spreadsheetId: null,
     });
   }
 }
@@ -60,9 +60,9 @@ export async function getGoogleSheetsStatus(userId: number) {
   }).from(googleSheetsConnections).where(eq(googleSheetsConnections.userId, userId)).limit(1);
   return {
     connected: Boolean(rows[0]),
-    spreadsheetId: rows[0]?.spreadsheetId || ENV.googleSpreadsheetId || "",
+    spreadsheetId: rows[0]?.spreadsheetId || "",
     connectedEmail: rows[0]?.connectedEmail ?? null,
-    configured: Boolean(rows[0]?.spreadsheetId || ENV.googleSpreadsheetId),
+    configured: Boolean(rows[0]?.spreadsheetId),
   };
 }
 
@@ -74,6 +74,11 @@ export async function configureGoogleSpreadsheet(userId: number, spreadsheetId: 
   const rows = await db.select({ userId: googleSheetsConnections.userId })
     .from(googleSheetsConnections).where(eq(googleSheetsConnections.userId, userId)).limit(1);
   if (!rows[0]) throw new Error("กรุณาเชื่อมต่อ Google Sheets ก่อน");
+  const currentToken = await getGoogleDriveAccessToken(userId);
+  await axios.get(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(normalized)}?fields=spreadsheetId`, {
+    headers: { Authorization: `Bearer ${currentToken}` },
+    timeout: 15000,
+  });
   await db.update(googleSheetsConnections).set({ spreadsheetId: normalized })
     .where(eq(googleSheetsConnections.userId, userId));
   return getGoogleSheetsStatus(userId);
@@ -86,8 +91,8 @@ async function accessToken(userId: number) {
     .where(eq(googleSheetsConnections.userId, userId)).limit(1);
   const connection = rows[0];
   if (!connection) throw new Error("ยังไม่ได้เชื่อมต่อ Google Sheets");
-  const spreadsheetId = connection.spreadsheetId || ENV.googleSpreadsheetId;
-  if (!spreadsheetId) throw new Error("ยังไม่ได้ตั้งค่า GOOGLE_SPREADSHEET_ID ใน Railway");
+  const spreadsheetId = connection.spreadsheetId;
+  if (!spreadsheetId) throw new Error("กรุณาระบุ Spreadsheet ID ของบัญชี Google ที่เชื่อมต่อ");
   const response = await axios.post("https://oauth2.googleapis.com/token", new URLSearchParams({
     client_id: ENV.googleClientId,
     client_secret: ENV.googleClientSecret,
@@ -121,6 +126,11 @@ export async function getGoogleDriveAccessToken(userId: number): Promise<string>
   const token = response.data?.access_token as string | undefined;
   if (!token) throw new Error("Google ไม่ส่ง access token กลับมา");
   return token;
+}
+
+export async function getGoogleSheetsCredentials(userId: number): Promise<{ accessToken: string; spreadsheetId: string }> {
+  const credentials = await accessToken(userId);
+  return { accessToken: credentials.token, spreadsheetId: credentials.spreadsheetId };
 }
 
 async function googleRequest<T>(token: string, method: "GET" | "POST" | "PUT", url: string, data?: unknown) {

@@ -11,7 +11,7 @@ export interface PaySheetProps {
   defaultAmount: number;
   totalDue?: number;
   type?: "pay" | "receive";
-  onConfirm: (data: { amount: number; date: string; note: string }) => Promise<void>;
+  onConfirm: (data: { amount: number; date: string; note: string; receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string } }) => Promise<void>;
 }
 
 export const PaySheet: React.FC<PaySheetProps> = ({
@@ -27,6 +27,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
   const [amount, setAmount] = useState<string>(String(defaultAmount || 0));
   const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState<string>("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -34,6 +35,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
       setAmount(String(defaultAmount || 0));
       setDate(new Date().toISOString().slice(0, 10));
       setNote("");
+      setReceiptFile(null);
     }
   }, [open, defaultAmount]);
 
@@ -46,11 +48,19 @@ export const PaySheet: React.FC<PaySheetProps> = ({
 
     setLoading(true);
     try {
-      await onConfirm({
-        amount: numAmount,
-        date,
-        note: note.trim(),
-      });
+      let receipt: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string } | undefined;
+      if (receiptFile) {
+        if (receiptFile.size > 8 * 1024 * 1024) throw new Error("ไฟล์หลักฐานต้องมีขนาดไม่เกิน 8 MB");
+        if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(receiptFile.type)) throw new Error("รองรับ JPG, PNG, WEBP หรือ PDF เท่านั้น");
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+          reader.onerror = () => reject(new Error("อ่านไฟล์หลักฐานไม่สำเร็จ"));
+          reader.readAsDataURL(receiptFile);
+        });
+        receipt = { fileName: receiptFile.name, mimeType: receiptFile.type as "image/jpeg" | "image/png" | "image/webp" | "application/pdf", base64 };
+      }
+      await onConfirm({ amount: numAmount, date, note: note.trim(), receipt });
       onClose();
     } finally {
       setLoading(false);
@@ -131,6 +141,21 @@ export const PaySheet: React.FC<PaySheetProps> = ({
               onChange={(e) => setNote(e.target.value)}
               className="w-full h-11 px-3.5 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:ring-1 focus:ring-[#1C1917]"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[#1C1917] mb-1.5">
+              แนบสลิป / หลักฐาน (ไม่บังคับ)
+            </label>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+              className="w-full text-xs"
+            />
+            <p className="text-[11px] text-[#78716C] mt-1">
+              {receiptFile ? `${receiptFile.name} · ${(receiptFile.size / 1024 / 1024).toFixed(2)} MB` : "JPG, PNG, WEBP หรือ PDF ขนาดไม่เกิน 8 MB"}
+            </p>
           </div>
 
           <div className="pt-2">

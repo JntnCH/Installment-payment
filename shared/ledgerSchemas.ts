@@ -45,6 +45,7 @@ export const transactionInputSchema = z.object({
   occurredAt: z.coerce.date().optional(),
   source: z.string().trim().max(64).optional().default("manual"),
   note: z.string().trim().max(2_000).optional().default(""),
+  receiptKey: z.string().max(512).optional(),
 });
 
 export const schedulePaymentInputSchema = z.object({
@@ -53,6 +54,7 @@ export const schedulePaymentInputSchema = z.object({
   paidAt: z.coerce.date().optional(),
   source: z.string().trim().max(64).optional().default("manual"),
   note: z.string().trim().max(2_000).optional().default(""),
+  receiptKey: z.string().max(512).optional(),
 });
 
 export const ledgerIdInputSchema = z.object({

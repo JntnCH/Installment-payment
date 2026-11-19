@@ -17,6 +17,7 @@ import type {
   TransactionUpdateInput,
 } from "../shared/ledgerSchemas";
 import { getDb } from "./db";
+import { uploadReceiptToGoogleDrive } from "./googleDrive";
 
 const asAmount = (value: string | number | null | undefined) => Number(value ?? 0);
 const asDate = (value: Date | string | null | undefined) => {
@@ -77,6 +78,7 @@ function toScheduleTransaction(row: ScheduleRow) {
     paidAt: asTimestamp(row.paidAt),
     source: "database:schedule",
     note: row.note ?? `งวดที่ ${row.installmentNo}`,
+    receiptKey: "",
   };
 }
 
@@ -91,6 +93,7 @@ function toLedgerTransaction(row: TransactionRow) {
     paidAt: asTimestamp(row.occurredAt),
     source: row.source,
     note: row.note ?? "",
+    receiptKey: row.receiptKey ?? "",
   };
 }
 
@@ -261,7 +264,10 @@ export async function getContractLedger(ownerId: number, contractId: string) {
     return {
       party: party ? toParty(party) : null,
       contract: toContract(contract),
-      transactions: [...schedules.map(toScheduleTransaction), ...transactionRows.map(toLedgerTransaction)],
+      transactions: [...schedules.map(schedule => ({
+        ...toScheduleTransaction(schedule),
+        receiptKey: transactionRows.find(tx => tx.scheduleId === schedule.id && tx.receiptKey)?.receiptKey ?? "",
+      })), ...transactionRows.map(toLedgerTransaction)],
     };
   }
   const schedules: ScheduleRow[] = [];
@@ -283,7 +289,10 @@ export async function getContractLedger(ownerId: number, contractId: string) {
   return {
     party: party ? toParty(party) : null,
     contract: toContract(contract),
-    transactions: [...schedules.map(toScheduleTransaction), ...transactionRows.map(toLedgerTransaction)],
+    transactions: [...schedules.map(schedule => ({
+      ...toScheduleTransaction(schedule),
+      receiptKey: transactionRows.find(tx => tx.scheduleId === schedule.id && tx.receiptKey)?.receiptKey ?? "",
+    })), ...transactionRows.map(toLedgerTransaction)],
   };
 }
 
@@ -711,6 +720,7 @@ export async function createLedgerTransaction(ownerId: number, input: Transactio
       occurredAt,
       source: input.source,
       note: input.note || null,
+      receiptKey: input.receiptKey ?? null,
     });
     const [row] = await db
       .select()
@@ -730,6 +740,7 @@ export async function createLedgerTransaction(ownerId: number, input: Transactio
     occurredAt,
     source: input.source,
     note: input.note || null,
+    receiptKey: input.receiptKey ?? null,
     createdAt: new Date(),
   };
   memoryTransactions.set(id, row);
@@ -827,6 +838,32 @@ export async function updateLedgerTransaction(ownerId: number, input: Transactio
   };
   memoryTransactions.set(input.id, updated);
   return toLedgerTransaction(updated);
+}
+
+export async function uploadLedgerReceipt(
+  ownerId: number,
+  scheduleId: string,
+  paidDate: string,
+  fileName: string,
+  mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf",
+  base64: string,
+) {
+  const db = await getDb();
+  if (db) {
+    const [schedule] = await db.select({ id: contractPaymentSchedules.id, status: contractPaymentSchedules.status })
+      .from(contractPaymentSchedules)
+      .where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.id, scheduleId)))
+      .limit(1);
+    if (!schedule || schedule.status !== "pending") throw new Error("ไม่พบงวดที่ยังเปิดให้ชำระ");
+  } else {
+    const schedule = memorySchedules.get(scheduleId);
+    if (!schedule || schedule.ownerId !== ownerId || schedule.status !== "pending") throw new Error("ไม่พบงวดที่ยังเปิดให้ชำระ");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidDate)) throw new Error("วันที่ชำระไม่ถูกต้อง");
+  const buffer = Buffer.from(base64, "base64");
+  if (!buffer.length || buffer.length > 8 * 1024 * 1024) throw new Error("ไฟล์หลักฐานต้องมีขนาดไม่เกิน 8 MB");
+  const uploaded = await uploadReceiptToGoogleDrive(ownerId, paidDate, fileName, mimeType, buffer);
+  return { receiptKey: uploaded.fileId };
 }
 
 export async function markSchedulePaid(ownerId: number, input: SchedulePaymentInput) {
@@ -945,6 +982,7 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
         occurredAt: paidAt,
         source: input.source,
         note: input.note || `ชำระงวดที่ ${schedule.installmentNo}`,
+        receiptKey: input.receiptKey ?? null,
       });
     });
 
@@ -998,7 +1036,7 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
     const isSelected = item.row.id === s.id;
     memorySchedules.set(item.row.id, {...item.row, amount: (revisedAmountCents / 100).toFixed(2), ...(isSelected ? {status: newPaidCents >= newAmountCents ? "paid" : "pending", paidAmount: (newPaidCents / 100).toFixed(2), paidAt: newPaidCents >= newAmountCents ? paidAt : null} : {}), updatedAt: new Date()});
   }
-  await createLedgerTransaction(ownerId, {partyId: s.partyId, contractId: s.contractId, scheduleId: s.id, type: "payment", amount: input.paidAmount, occurredAt: paidAt, source: input.source, note: input.note || `ชำระงวดที่ ${s.installmentNo}`});
+  await createLedgerTransaction(ownerId, {partyId: s.partyId, contractId: s.contractId, scheduleId: s.id, type: "payment", amount: input.paidAmount, occurredAt: paidAt, source: input.source, note: input.note || `ชำระงวดที่ ${s.installmentNo}`, receiptKey: input.receiptKey});
   const updated = memorySchedules.get(s.id);
   return updated ? toScheduleTransaction(updated) : null;
 }

@@ -97,6 +97,7 @@ export const ledgerTransactions = mysqlTable("ledger_transactions", {
   occurredAt: timestamp("occurredAt").notNull(),
   source: varchar("source", { length: 64 }).notNull().default("manual"),
   note: text("note"),
+  receiptKey: varchar("receiptKey", { length: 512 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => ({
   ownerOccurredIdx: index("ledger_transaction_owner_occurred_idx").on(table.ownerId, table.occurredAt),

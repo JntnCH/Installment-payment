@@ -1,7 +1,7 @@
 import axios from "axios";
 import type { Express } from "express";
 import { and, eq, isNull } from "drizzle-orm";
-import { monthlyBills } from "../../drizzle/schema";
+import { ledgerTransactions, monthlyBills } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { getGoogleDriveAccessToken } from "../googleSheets";
 import { ENV } from "./env";
@@ -21,12 +21,16 @@ export function registerStorageProxy(app: Express) {
         const user = await sdk.authenticateRequest(req);
         const db = await getDb();
         if (!db) throw new Error("Database is not available");
-        const rows = await db.select({ id: monthlyBills.id }).from(monthlyBills).where(and(
+        const billRows = await db.select({ id: monthlyBills.id }).from(monthlyBills).where(and(
           eq(monthlyBills.ownerId, user.id),
           eq(monthlyBills.receiptKey, key),
           isNull(monthlyBills.deletedAt),
         )).limit(1);
-        if (!rows[0]) {
+        const ledgerRows = await db.select({ id: ledgerTransactions.id }).from(ledgerTransactions).where(and(
+          eq(ledgerTransactions.ownerId, user.id),
+          eq(ledgerTransactions.receiptKey, key),
+        )).limit(1);
+        if (!billRows[0] && !ledgerRows[0]) {
           res.status(404).send("Receipt not found");
           return;
         }
