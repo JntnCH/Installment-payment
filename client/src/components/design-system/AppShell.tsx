@@ -136,10 +136,10 @@ export const AppShell: React.FC<AppShellProps> = ({
             </div>
             <div className="min-w-0 flex-1">
               <div className="font-semibold text-sm tracking-tight text-[#172033] leading-tight">
-                สมุดบัญชีเงินกู้
+                ระบบจัดการรายรับ–รายจ่าย
               </div>
               <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                Personal Debt & Ledger
+                Income & Expenses Management
               </div>
             </div>
           </div>
@@ -206,7 +206,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           </div>
           <div>
             <div className="font-semibold text-sm text-[#172033] leading-tight">
-              สมุดบัญชีเงินกู้
+              ระบบจัดการรายรับ–รายจ่าย
             </div>
             <div className="text-[10px] text-slate-500">
               {navItems.find((n) => isTabActive(n.id))?.label || "จัดการหนี้ & สัญญา"}
