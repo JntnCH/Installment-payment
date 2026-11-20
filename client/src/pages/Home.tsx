@@ -9,6 +9,7 @@ import LoanCalculator from "@/components/LoanCalculator";
 import GoogleSheetsSync from "@/components/GoogleSheetsSync";
 import AccountConnections from "@/components/AccountConnections";
 import SystemSettings from "@/components/SystemSettings";
+import FinancialHealth from "@/components/FinancialHealth";
 import { trpc } from "@/lib/trpc";
 
 export default function Home() {
@@ -77,6 +78,8 @@ export default function Home() {
       )}
 
       {activeTab === "sheets" && <><AccountConnections /><GoogleSheetsSync /></>}
+
+      {activeTab === "wealth" && <FinancialHealth />}
 
       {activeTab === "settings" && <SystemSettings />}
     </AppShell>
