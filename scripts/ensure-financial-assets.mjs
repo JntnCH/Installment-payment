@@ -29,6 +29,22 @@ try {
     CONSTRAINT financial_assets_owner_fk FOREIGN KEY (ownerId) REFERENCES users (id) ON DELETE CASCADE
   ) ENGINE=InnoDB`);
 
+  await connection.query(`CREATE TABLE IF NOT EXISTS financial_asset_sync_outbox (
+    id varchar(64) NOT NULL,
+    ownerId int NOT NULL,
+    assetId varchar(64) NOT NULL,
+    action enum('upsert','delete') NOT NULL,
+    status enum('pending','processing','done') NOT NULL DEFAULT 'pending',
+    attempts int NOT NULL DEFAULT 0,
+    nextRetryAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lastError text,
+    createdAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY financial_asset_outbox_retry_idx (status, nextRetryAt),
+    KEY financial_asset_outbox_asset_idx (ownerId, assetId, createdAt),
+    CONSTRAINT financial_asset_outbox_owner_fk FOREIGN KEY (ownerId) REFERENCES users (id) ON DELETE CASCADE
+  ) ENGINE=InnoDB`);
+
   const [columns] = await connection.execute(
     "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'financial_assets'",
     [databaseName]
