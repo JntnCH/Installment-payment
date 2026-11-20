@@ -219,6 +219,7 @@ export const appRouter = router({
     createTransaction: protectedProcedure
       .input(
         z.object({
+          transactionId: z.string().trim().min(1).max(128).optional(),
           type: z.string().optional(),
           item: z.string().optional(),
           amount: z.number().positive(),
