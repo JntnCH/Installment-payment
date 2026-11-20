@@ -1,7 +1,7 @@
 import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
 import axios from "axios";
 import { and, asc, eq, lte } from "drizzle-orm";
-import { googleSheetsConnections, monthlyBillSyncOutbox, monthlyBills } from "../drizzle/schema";
+import { financialAssetSyncOutbox, financialAssets, googleSheetsConnections, monthlyBillSyncOutbox, monthlyBills } from "../drizzle/schema";
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
 
@@ -211,6 +211,108 @@ async function syncBill(token: string, spreadsheetId: string, billId: string, ac
   }
 }
 
+const ASSET_TAB_NAME = "ทรัพย์สิน";
+const ASSET_HEADERS = ["Asset ID", "ประเภท", "ชื่อทรัพย์สิน", "มูลค่าปัจจุบัน", "หมายเหตุ", "แก้ไขล่าสุด"];
+
+async function syncFinancialAsset(token: string, spreadsheetId: string, assetId: string, action: "upsert" | "delete", userId: number) {
+  const meta = await googleRequest<{ sheets?: Array<{ properties?: { title?: string } }> }>(
+    token, "GET", `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`,
+  );
+  if (!(meta.sheets ?? []).some(sheet => sheet.properties?.title === ASSET_TAB_NAME)) {
+    await googleRequest(token, "POST", `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}:batchUpdate`, {
+      requests: [{ addSheet: { properties: { title: ASSET_TAB_NAME } } }],
+    });
+  }
+  const headerRange = encodeURIComponent(`'${ASSET_TAB_NAME}'!A1:F1`);
+  const header = await googleRequest<{ values?: unknown[][] }>(
+    token, "GET", `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${headerRange}`,
+  );
+  if (!header.values?.length || (header.values[0]?.length ?? 0) < ASSET_HEADERS.length) {
+    await googleRequest(token, "PUT",
+      `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${headerRange}?valueInputOption=RAW`,
+      { values: [ASSET_HEADERS] },
+    );
+  }
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select().from(financialAssets).where(and(
+    eq(financialAssets.ownerId, userId), eq(financialAssets.id, assetId),
+  )).limit(1);
+  const asset = rows[0];
+  const idRange = encodeURIComponent(`'${ASSET_TAB_NAME}'!A2:A`);
+  const existing = await googleRequest<{ values?: string[][] }>(
+    token, "GET", `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${idRange}`,
+  );
+  const index = (existing.values ?? []).findIndex(row => row[0] === assetId);
+  if (action === "delete" || !asset) {
+    if (index >= 0) {
+      const rowNumber = index + 2;
+      const range = encodeURIComponent(`'${ASSET_TAB_NAME}'!A${rowNumber}:F${rowNumber}`);
+      await googleRequest(token, "POST",
+        `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}:clear`, {},
+      );
+    }
+    return;
+  }
+  const categoryLabels: Record<string, string> = {
+    cash: "เงินสด", bank: "เงินฝากธนาคาร", vehicle: "รถยนต์ / รถจักรยานยนต์",
+    property: "บ้าน / ที่ดิน", gold: "ทองคำ", investment: "หุ้น / กองทุน / การลงทุน", other: "ทรัพย์สินอื่น ๆ",
+  };
+  const values = [[asset.id, categoryLabels[asset.category] ?? asset.category, asset.name, Number(asset.amount), asset.note ?? "", asset.updatedAt.toISOString()]];
+  if (index >= 0) {
+    const rowNumber = index + 2;
+    const range = encodeURIComponent(`'${ASSET_TAB_NAME}'!A${rowNumber}:F${rowNumber}`);
+    await googleRequest(token, "PUT",
+      `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}?valueInputOption=USER_ENTERED`,
+      { values },
+    );
+  } else {
+    const range = encodeURIComponent(`'${ASSET_TAB_NAME}'!A:F`);
+    await googleRequest(token, "POST",
+      `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      { values },
+    );
+  }
+}
+
+let assetQueueRunning = false;
+async function processFinancialAssetSyncQueue() {
+  if (assetQueueRunning) return;
+  assetQueueRunning = true;
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const pending = await db.select().from(financialAssetSyncOutbox)
+      .where(and(eq(financialAssetSyncOutbox.status, "pending"), lte(financialAssetSyncOutbox.nextRetryAt, new Date())))
+      .orderBy(asc(financialAssetSyncOutbox.createdAt)).limit(20);
+    for (const job of pending) {
+      const claim = await db.update(financialAssetSyncOutbox).set({ status: "processing" })
+        .where(and(eq(financialAssetSyncOutbox.id, job.id), eq(financialAssetSyncOutbox.status, "pending")));
+      const affectedRows = Array.isArray(claim)
+        ? Number((claim[0] as { affectedRows?: number })?.affectedRows)
+        : Number((claim as unknown as { affectedRows?: number })?.affectedRows);
+      if (Number.isFinite(affectedRows) && affectedRows === 0) continue;
+      try {
+        const credentials = await accessToken(job.ownerId);
+        await syncFinancialAsset(credentials.token, credentials.spreadsheetId, job.assetId, job.action, job.ownerId);
+        await db.update(financialAssetSyncOutbox).set({ status: "done", lastError: null })
+          .where(eq(financialAssetSyncOutbox.id, job.id));
+      } catch (error) {
+        const attempts = job.attempts + 1;
+        const delayMinutes = Math.min(360, 2 ** Math.min(attempts, 8));
+        await db.update(financialAssetSyncOutbox).set({
+          status: "pending", attempts,
+          nextRetryAt: new Date(Date.now() + delayMinutes * 60_000),
+          lastError: (error instanceof Error ? error.message : String(error)).slice(0, 2000),
+        }).where(eq(financialAssetSyncOutbox.id, job.id));
+        console.error("[Financial asset sync] Retry scheduled:", job.id, error);
+      }
+    }
+  } finally {
+    assetQueueRunning = false;
+  }
+}
+
 let running = false;
 export async function processMonthlyBillSyncQueue() {
   if (running) return;
@@ -248,6 +350,7 @@ export async function processMonthlyBillSyncQueue() {
   } finally {
     running = false;
   }
+  void processFinancialAssetSyncQueue();
 }
 
 export async function startMonthlyBillSyncWorker() {
@@ -258,7 +361,13 @@ export async function startMonthlyBillSyncWorker() {
   }
   await db.update(monthlyBillSyncOutbox).set({ status: "pending" })
     .where(eq(monthlyBillSyncOutbox.status, "processing"));
+  await db.update(financialAssetSyncOutbox).set({ status: "pending" })
+    .where(eq(financialAssetSyncOutbox.status, "processing"));
   void processMonthlyBillSyncQueue();
-  const timer = setInterval(() => void processMonthlyBillSyncQueue(), 30_000);
+  void processFinancialAssetSyncQueue();
+  const timer = setInterval(() => {
+    void processMonthlyBillSyncQueue();
+    void processFinancialAssetSyncQueue();
+  }, 30_000);
   timer.unref?.();
 }
