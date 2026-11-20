@@ -32,7 +32,7 @@ export type SheetsTransactions = {
 
 function numberValue(value: unknown): number {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  const parsed = Number(String(value ?? "").replace(/[,฿\\s]/g, ""));
+  const parsed = Number(String(value ?? "").replace(/[,฿\s]/g, ""));
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
