@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { financialAssets } from "../drizzle/schema";
 import { getDb } from "./db";
 import { getDashboardStats } from "./ledger";
@@ -39,11 +39,11 @@ export async function saveFinancialAsset(ownerId: number, input: {
   };
   if (input.id) {
     const existing = await db.select({ id: financialAssets.id }).from(financialAssets)
-      .where(eq(financialAssets.id, input.id)).limit(1);
+      .where(and(eq(financialAssets.id, input.id), eq(financialAssets.ownerId, ownerId))).limit(1);
     if (!existing[0]) throw new Error("ไม่พบรายการทรัพย์สิน");
-    await db.update(financialAssets).set(values).where(eq(financialAssets.id, input.id));
+    await db.update(financialAssets).set(values).where(and(eq(financialAssets.id, input.id), eq(financialAssets.ownerId, ownerId)));
     const rows = await db.select().from(financialAssets)
-      .where(eq(financialAssets.id, input.id)).limit(1);
+      .where(and(eq(financialAssets.id, input.id), eq(financialAssets.ownerId, ownerId))).limit(1);
     return rows[0] ? toAsset(rows[0]) : null;
   }
   const id = randomUUID();
@@ -55,7 +55,7 @@ export async function saveFinancialAsset(ownerId: number, input: {
 export async function deleteFinancialAsset(ownerId: number, id: string) {
   const db = await getDb();
   if (!db) throw new Error("ฐานข้อมูลยังไม่พร้อมใช้งาน");
-  await db.delete(financialAssets).where(eq(financialAssets.id, id));
+  await db.delete(financialAssets).where(and(eq(financialAssets.id, id), eq(financialAssets.ownerId, ownerId)));
   return { success: true };
 }
 
