@@ -117,6 +117,7 @@ export default function CashflowManager() {
         });
       }
       await createSheetsTx.mutateAsync({
+        transactionId: crypto.randomUUID(),
         date: txForm.date,
         ...(receiptFile ? { fileName: receiptFile.name, mimeType: receiptFile.type as "image/jpeg" | "image/png" | "image/webp" | "application/pdf", base64 } : {}),
         type: txForm.type,
