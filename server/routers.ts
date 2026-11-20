@@ -49,6 +49,7 @@ import { configureGoogleSpreadsheet, getGoogleSheetsStatus } from "./googleSheet
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { incomeExpensesAdminConfigured, incomeExpensesAdminRequest } from "./incomeExpensesAdmin";
+import { deleteFinancialAsset, getFinancialHealth, saveFinancialAsset } from "./wealth";
 
 function isDemoId(id: unknown): boolean {
   return typeof id === "string" && id.startsWith("demo-");
@@ -260,6 +261,18 @@ export const appRouter = router({
       id: z.string().min(1), paidAmount: z.number().positive(), paidAt: z.string().datetime(), receiptKey: z.string().max(512).optional(),
     })).mutation(({ ctx, input }) => recordMonthlyBillPayment(ctx.user.id, input)),
     delete: protectedProcedure.input(z.object({ id: z.string().min(1) })).mutation(({ ctx, input }) => deleteMonthlyBill(ctx.user.id, input.id)),
+  }),
+  wealth: router({
+    getHealth: protectedProcedure.query(({ ctx }) => getFinancialHealth(ctx.user.id)),
+    saveAsset: protectedProcedure.input(z.object({
+      id: z.string().min(1).max(64).optional(),
+      category: z.enum(["cash", "bank", "vehicle", "property", "gold", "investment", "other"]),
+      name: z.string().trim().min(1).max(160),
+      amount: z.number().positive().max(9999999999999),
+      note: z.string().max(1000).optional(),
+    })).mutation(({ ctx, input }) => saveFinancialAsset(ctx.user.id, input)),
+    deleteAsset: protectedProcedure.input(z.object({ id: z.string().min(1).max(64) }))
+      .mutation(({ ctx, input }) => deleteFinancialAsset(ctx.user.id, input.id)),
   }),
   ledger: router({
     getStats: protectedProcedure.query(async ({ ctx }) => {
