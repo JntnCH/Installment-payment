@@ -148,3 +148,17 @@ export const googleSheetsConnections = mysqlTable("google_sheets_connections", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+
+
+export const financialAssets = mysqlTable("financial_assets", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  category: mysqlEnum("category", ["cash", "bank", "vehicle", "property", "gold", "investment", "other"]).notNull(),
+  name: varchar("name", { length: 160 }).notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  note: text("note"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({
+  ownerCategoryIdx: index("financial_asset_owner_category_idx").on(table.ownerId, table.category),
+}));
