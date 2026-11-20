@@ -162,3 +162,19 @@ export const financialAssets = mysqlTable("financial_assets", {
 }, table => ({
   ownerCategoryIdx: index("financial_asset_owner_category_idx").on(table.ownerId, table.category),
 }));
+
+
+export const financialAssetSyncOutbox = mysqlTable("financial_asset_sync_outbox", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  assetId: varchar("assetId", { length: 64 }).notNull(),
+  action: mysqlEnum("action", ["upsert", "delete"]).notNull(),
+  status: mysqlEnum("status", ["pending", "processing", "done"]).notNull().default("pending"),
+  attempts: int("attempts").notNull().default(0),
+  nextRetryAt: timestamp("nextRetryAt").defaultNow().notNull(),
+  lastError: text("lastError"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => ({
+  ownerStatusRetryIdx: index("financial_asset_outbox_retry_idx").on(table.status, table.nextRetryAt),
+  assetCreatedIdx: index("financial_asset_outbox_asset_idx").on(table.ownerId, table.assetId, table.createdAt),
+}));
