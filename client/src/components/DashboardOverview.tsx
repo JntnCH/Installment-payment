@@ -203,16 +203,16 @@ export default function DashboardOverview({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="text-xs font-mono text-[#78716C] uppercase tracking-wider mb-1">
-              ยอดคงค้างรอเรียกเก็บสุทธิทั้งหมด (Net Outstanding)
+              ยอดหนี้สินคงเหลือที่ต้องชำระ (Outstanding Liabilities)
             </div>
             <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4">
               <Money
-                amount={stats?.totalOutstanding ?? 0}
+                amount={stats?.creditorOutstanding ?? 0}
                 size="hero"
                 sentiment="default"
               />
               <span className="text-xs text-[#78716C]">
-                จากสัญญาทั้งหมด {stats?.totalContracts ?? 0} รายการ
+                หนี้สินจากเจ้าหนี้ {stats?.creditorCount ?? 0} ราย
               </span>
             </div>
           </div>
