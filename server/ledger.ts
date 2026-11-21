@@ -1267,30 +1267,19 @@ export async function getDashboardStats(ownerId: number) {
     const amt = asAmount(t.amount);
     const party = partyMap.get(t.partyId);
     const isCreditor = party?.role === "creditor";
+    const isDebtRepayment = t.type === "payment" && isCreditor;
+    const isGoodsInstallmentPayment =
+      t.type === "payment" && t.source === "ledger_debtor_payment";
 
-    if (t.type === "payment") {
-      if (isCreditor) {
-        // We pay creditor -> Outflow
-        totalOutflow += amt;
-      } else {
-        // Debtor pays us -> Inflow
-        totalInflow += amt;
-      }
-    } else if (t.type === "disbursement") {
-      if (isCreditor) {
-        // We borrowed money -> Inflow
-        totalInflow += amt;
-      } else {
-        // We lent money out -> Outflow
-        totalOutflow += amt;
-      }
-    } else {
-      // adjustment
-      if (amt < 0) {
-        totalOutflow += Math.abs(amt);
-      } else {
-        totalInflow += amt;
-      }
+    if (isDebtRepayment || isGoodsInstallmentPayment) {
+      // Outflow includes only debt repayments and product installment payments.
+      totalOutflow += amt;
+    } else if (t.type === "payment" || (t.type === "disbursement" && isCreditor)) {
+      // Debtor payments received and borrowed funds are inflow.
+      totalInflow += amt;
+    } else if (t.type === "adjustment" && amt >= 0) {
+      // Positive adjustments remain inflow; negative adjustments are excluded from Outflow.
+      totalInflow += amt;
     }
   }
 
