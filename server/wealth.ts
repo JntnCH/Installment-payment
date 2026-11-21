@@ -3,6 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { financialAssetSyncOutbox, financialAssets } from "../drizzle/schema";
 import { getDb } from "./db";
 import { getDashboardStats } from "./ledger";
+import { getSheetsBalance } from "./sheetsProxy";
 
 async function enqueueAssetSync(tx: any, ownerId: number, assetId: string, action: "upsert" | "delete") {
   await tx.insert(financialAssetSyncOutbox).values({
@@ -78,13 +79,35 @@ export async function deleteFinancialAsset(ownerId: number, id: string) {
 }
 
 export async function getFinancialHealth(ownerId: number) {
-  const [assets, debtStats] = await Promise.all([
+  const [assets, debtStats, sheetsBalance] = await Promise.all([
     listFinancialAssets(ownerId),
     getDashboardStats(ownerId),
+    getSheetsBalance(ownerId).catch(() => null),
   ]);
-  const totalAssets = assets.reduce((sum, item) => sum + item.amount, 0);
-  const cashAssets = assets.filter(item => item.category === "cash" || item.category === "bank")
+
+  const sheetAccounts = sheetsBalance?.accountBalances ?? [];
+  const isCashAccount = (name: string) => {
+    const normalized = name.trim().toLowerCase();
+    return normalized === "เงินสด" || normalized === "cash";
+  };
+  const sheetCash = sheetAccounts
+    .filter(account => isCashAccount(account.name))
+    .reduce((sum, account) => sum + account.amount, 0);
+  const sheetBank = sheetAccounts
+    .filter(account => !isCashAccount(account.name))
+    .reduce((sum, account) => sum + account.amount, 0);
+  const hasSheetBalances = sheetsBalance !== null;
+
+  // Google Sheets is the source of truth for cash and bank balances.
+  // Exclude manually entered cash/bank assets when live sheet balances are available.
+  const nonLiquidAssets = assets
+    .filter(item => item.category !== "cash" && item.category !== "bank")
     .reduce((sum, item) => sum + item.amount, 0);
+  const manualLiquidAssets = assets
+    .filter(item => item.category === "cash" || item.category === "bank")
+    .reduce((sum, item) => sum + item.amount, 0);
+  const cashAssets = hasSheetBalances ? sheetCash + sheetBank : manualLiquidAssets;
+  const totalAssets = nonLiquidAssets + cashAssets;
   const totalLiabilities = Math.max(0, debtStats.creditorOutstanding || 0);
   const netWorth = totalAssets - totalLiabilities;
   const debtToAsset = totalAssets > 0 ? totalLiabilities / totalAssets : null;
@@ -93,6 +116,12 @@ export async function getFinancialHealth(ownerId: number) {
   const score = Math.round(debtScore + liquidityScore);
   return {
     assets,
+    sheetBalances: {
+      available: hasSheetBalances,
+      cash: sheetCash,
+      bank: sheetBank,
+      accounts: sheetAccounts,
+    },
     totalAssets,
     cashAssets,
     totalLiabilities,
