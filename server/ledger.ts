@@ -1267,12 +1267,10 @@ export async function getDashboardStats(ownerId: number) {
     const amt = asAmount(t.amount);
     const party = partyMap.get(t.partyId);
     const isCreditor = party?.role === "creditor";
-    const isDebtRepayment = t.type === "payment" && isCreditor;
-    const isGoodsInstallmentPayment =
-      t.type === "payment" && t.source === "ledger_debtor_payment";
 
-    if (isDebtRepayment || isGoodsInstallmentPayment) {
-      // Outflow includes only debt repayments and product installment payments.
+    if (t.type === "payment" && isCreditor) {
+      // Outflow includes payments made to creditors: liabilities and product installments.
+      // Do not use source alone: debtor collections share the same legacy source value.
       totalOutflow += amt;
     } else if (t.type === "payment" || (t.type === "disbursement" && isCreditor)) {
       // Debtor payments received and borrowed funds are inflow.
