@@ -1111,6 +1111,30 @@ export async function getDashboardStats(ownerId: number) {
   }
 
   const contractMap = new Map(allContracts.map(c => [c.id, c]));
+  const contractsByParty = new Map<string, ContractRow[]>();
+  for (const contract of allContracts) {
+    const partyContracts = contractsByParty.get(contract.partyId) ?? [];
+    partyContracts.push(contract);
+    contractsByParty.set(contract.partyId, partyContracts);
+  }
+  const scheduleMap = new Map(allSchedules.map(schedule => [schedule.id, schedule]));
+  const resolveTransactionContract = (transaction: TransactionRow): ContractRow | undefined => {
+    const linkedContract = transaction.contractId
+      ? contractMap.get(transaction.contractId)
+      : undefined;
+    if (linkedContract?.partyId === transaction.partyId) return linkedContract;
+
+    const linkedSchedule = transaction.scheduleId
+      ? scheduleMap.get(transaction.scheduleId)
+      : undefined;
+    if (linkedSchedule?.partyId === transaction.partyId) {
+      const scheduleContract = contractMap.get(linkedSchedule.contractId);
+      if (scheduleContract?.partyId === transaction.partyId) return scheduleContract;
+    }
+
+    const partyContracts = contractsByParty.get(transaction.partyId) ?? [];
+    return partyContracts.length === 1 ? partyContracts[0] : undefined;
+  };
 
   const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
   const todayMs = Date.parse(`${todayStr}T00:00:00+07:00`);
@@ -1267,10 +1291,11 @@ export async function getDashboardStats(ownerId: number) {
     const amt = asAmount(t.amount);
     const party = partyMap.get(t.partyId);
     const isCreditor = party?.role === "creditor";
+    const contract = resolveTransactionContract(t);
 
-    if (t.type === "payment" && isCreditor) {
-      // Outflow includes payments made to creditors: liabilities and product installments.
-      // Do not use source alone: debtor collections share the same legacy source value.
+    if (t.type === "payment" && isCreditor && contract) {
+      // Outflow includes only creditor payments linked to a liability or product-installment contract.
+      // Resolve missing contractId only through its schedule or a single unambiguous party contract.
       totalOutflow += amt;
     } else if (t.type === "payment" || (t.type === "disbursement" && isCreditor)) {
       // Debtor payments received and borrowed funds are inflow.
@@ -1293,16 +1318,14 @@ export async function getDashboardStats(ownerId: number) {
   }>();
   for (const t of allTransactions) {
     const party = partyMap.get(t.partyId);
-    const contract = t.contractId ? contractMap.get(t.contractId) : undefined;
-    const contractTitle = contract?.title || "ไม่มีสัญญา";
+    const contract = resolveTransactionContract(t);
+    const contractTitle = contract?.title || "ไม่มีสัญญา/ระบุไม่ได้";
     const isProductInstallment = Boolean(contract?.title.trim().startsWith("ผ่อน "));
     let classification = "ไม่เข้ากลุ่ม Outflow";
     if (t.type === "payment" && party?.role === "creditor") {
-      classification = isProductInstallment
-        ? "การผ่อนสินค้า"
-        : contract
-          ? "หนี้สิน"
-          : "เจ้าหนี้ไม่มีสัญญา (ตรวจสอบ)";
+      classification = contract
+        ? isProductInstallment ? "การผ่อนสินค้า" : "หนี้สิน"
+        : "เจ้าหนี้ไม่มีสัญญา/ระบุสัญญาไม่ได้ (ไม่รวม)";
     } else if (t.type === "payment" && party?.role === "debtor") {
       classification = "รับชำระจากลูกหนี้ (ไม่รวม)";
     } else if (t.type === "disbursement" && party?.role === "creditor") {
