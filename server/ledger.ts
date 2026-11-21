@@ -1281,6 +1281,59 @@ export async function getDashboardStats(ownerId: number) {
     }
   }
 
+  // Read-only diagnostic breakdown: identify exactly which payment groups contribute to Outflow.
+  const outflowAuditMap = new Map<string, {
+    classification: string;
+    partyName: string;
+    contractTitle: string;
+    source: string;
+    type: string;
+    count: number;
+    total: number;
+  }>();
+  for (const t of allTransactions) {
+    const party = partyMap.get(t.partyId);
+    const contract = t.contractId ? contractMap.get(t.contractId) : undefined;
+    const contractTitle = contract?.title || "ไม่มีสัญญา";
+    const isProductInstallment = Boolean(contract?.title.trim().startsWith("ผ่อน "));
+    let classification = "ไม่เข้ากลุ่ม Outflow";
+    if (t.type === "payment" && party?.role === "creditor") {
+      classification = isProductInstallment
+        ? "การผ่อนสินค้า"
+        : contract
+          ? "หนี้สิน"
+          : "เจ้าหนี้ไม่มีสัญญา (ตรวจสอบ)";
+    } else if (t.type === "payment" && party?.role === "debtor") {
+      classification = "รับชำระจากลูกหนี้ (ไม่รวม)";
+    } else if (t.type === "disbursement" && party?.role === "creditor") {
+      classification = "เงินกู้ที่ได้รับ (ไม่รวม)";
+    } else if (t.type === "adjustment") {
+      classification = asAmount(t.amount) >= 0
+        ? "รายการปรับปรุงบวก (Inflow)"
+        : "รายการปรับปรุงลบ (ไม่รวม)";
+    } else if (!party) {
+      classification = "ไม่พบข้อมูลคู่สัญญา (ตรวจสอบ)";
+    }
+
+    const partyName = party?.displayName || "ไม่ระบุคู่สัญญา";
+    const source = t.source || "ไม่ระบุ";
+    const key = JSON.stringify([classification, partyName, contractTitle, source, t.type]);
+    const current = outflowAuditMap.get(key) || {
+      classification,
+      partyName,
+      contractTitle,
+      source,
+      type: t.type,
+      count: 0,
+      total: 0,
+    };
+    current.count += 1;
+    current.total += asAmount(t.amount);
+    outflowAuditMap.set(key, current);
+  }
+  const outflowAudit = Array.from(outflowAuditMap.values())
+    .sort((a, b) => b.total - a.total);
+
   const monthlyTimelineMap = new Map<string, { month: string; scheduled: number; collected: number; pending: number }>();
   for (const s of allSchedules) {
     if (s.status === "waived") continue;
@@ -1319,6 +1372,7 @@ export async function getDashboardStats(ownerId: number) {
     creditorOutstanding,
     totalInflow,
     totalOutflow,
+    outflowAudit,
     projectedInterest: Math.max(0, totalScheduled - totalPrincipal),
     overdue: { count: overdueCount, amount: overdueAmount },
     today: { count: todayCount, amount: todayAmount },

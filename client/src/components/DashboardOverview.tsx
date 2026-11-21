@@ -198,6 +198,40 @@ export default function DashboardOverview({
         />
       </div>
 
+      {stats?.outflowAudit && (
+        <details className="rounded-xl border border-[#1C1917]/10 bg-[#FFFCF8] p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-[#1C1917]">
+            ตรวจสอบที่มาของยอด Outflow (รายงานอ่านอย่างเดียว)
+          </summary>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-xs">
+              <thead>
+                <tr className="border-b border-[#1C1917]/10 text-[#78716C]">
+                  <th className="py-2 pr-3">ประเภท</th>
+                  <th className="py-2 pr-3">คู่สัญญา</th>
+                  <th className="py-2 pr-3">สัญญา</th>
+                  <th className="py-2 pr-3">Source</th>
+                  <th className="py-2 pr-3 text-right">จำนวน</th>
+                  <th className="py-2 text-right">ยอดรวม</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.outflowAudit.map((item, index) => (
+                  <tr key={`${item.classification}-${item.partyName}-${item.contractTitle}-${item.source}-${index}`} className="border-b border-[#1C1917]/5">
+                    <td className="py-2 pr-3 font-medium">{item.classification}</td>
+                    <td className="py-2 pr-3">{item.partyName}</td>
+                    <td className="py-2 pr-3">{item.contractTitle}</td>
+                    <td className="py-2 pr-3 font-mono">{item.source}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{item.count}</td>
+                    <td className="py-2 text-right font-mono tabular-nums">฿{Number(item.total).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+
       {/* 3. Hero Ledger Overview Box */}
       <div className="bg-[#FFFCF8] rounded-[20px] border border-[#1C1917]/10 p-6 sm:p-8 space-y-6 shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
