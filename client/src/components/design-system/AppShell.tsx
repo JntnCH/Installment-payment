@@ -64,8 +64,8 @@ export const AppShell: React.FC<AppShellProps> = ({
     },
     {
       id: "debt_hub",
-      label: "จัดการหนี้ & สัญญา",
-      shortLabel: "หนี้ & สัญญา",
+      label: "จัดการหนี้สิน",
+      shortLabel: "หนี้สิน",
       icon: Layers,
     },
     {
@@ -209,7 +209,7 @@ export const AppShell: React.FC<AppShellProps> = ({
               ระบบจัดการรายรับ–รายจ่าย
             </div>
             <div className="text-[10px] text-slate-500">
-              {navItems.find((n) => isTabActive(n.id))?.label || "จัดการหนี้ & สัญญา"}
+              {navItems.find((n) => isTabActive(n.id))?.label || "จัดการหนี้สิน"}
             </div>
           </div>
         </div>
