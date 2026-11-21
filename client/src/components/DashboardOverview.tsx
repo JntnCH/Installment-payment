@@ -192,7 +192,7 @@ export default function DashboardOverview({
         <StatCard
           label="เงินจ่ายออกสะสม (Outflow)"
           amount={stats?.totalOutflow ?? 0}
-          subtitle="รวมยอดจ่ายหนี้ + เงินปล่อยกู้"
+          subtitle="รวมยอดชำระหนี้สิน + ค่างวดผ่อนสินค้า"
           accentBar="expense"
           sentiment="expense"
         />
