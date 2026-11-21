@@ -1297,8 +1297,9 @@ export async function getDashboardStats(ownerId: number) {
       // Outflow includes only creditor payments linked to a liability or product-installment contract.
       // Resolve missing contractId only through its schedule or a single unambiguous party contract.
       totalOutflow += amt;
-    } else if (t.type === "payment" || (t.type === "disbursement" && isCreditor)) {
-      // Debtor payments received and borrowed funds are inflow.
+    } else if ((t.type === "payment" && party?.role === "debtor") || (t.type === "disbursement" && isCreditor)) {
+      // Only debtor payments received and creditor disbursements are inflow.
+      // Unresolved creditor payments must not be reclassified as income.
       totalInflow += amt;
     } else if (t.type === "adjustment" && amt >= 0) {
       // Positive adjustments remain inflow; negative adjustments are excluded from Outflow.
