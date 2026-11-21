@@ -167,7 +167,7 @@ export default function DashboardOverview({
       />
 
       {/* 2. Hero Financial & Balance Breakdown Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <StatCard
           label="ลูกหนี้ค้างชำระ (ฉันเป็นเจ้าหนี้)"
           amount={stats?.debtorOutstanding ?? stats?.totalOutstanding ?? 0}

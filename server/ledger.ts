@@ -1182,6 +1182,12 @@ export async function getDashboardStats(ownerId: number) {
     }
 
     if (s.status === "pending") {
+      // Only active contracts contribute to current outstanding debt.
+      // Completed and cancelled contracts remain in historical totals but
+      // must not inflate the amount still owed.
+      const contract = contractMap.get(s.contractId);
+      if (contract?.status !== "active") continue;
+
       const remainingOnSchedule = Math.max(0, amount - paidAmount);
       totalOutstanding += remainingOnSchedule;
 
@@ -1195,7 +1201,6 @@ export async function getDashboardStats(ownerId: number) {
       if (due) {
         const dueMs = Date.parse(`${due}T00:00:00+07:00`);
         const daysDiff = Math.round((dueMs - todayMs) / 86_400_000);
-        const contract = contractMap.get(s.contractId);
 
         if (daysDiff < 0) {
           overdueCount++;
