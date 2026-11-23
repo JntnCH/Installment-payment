@@ -1132,8 +1132,9 @@ export async function getDashboardStats(ownerId: number) {
       if (scheduleContract?.partyId === transaction.partyId) return scheduleContract;
     }
 
-    const partyContracts = contractsByParty.get(transaction.partyId) ?? [];
-    return partyContracts.length === 1 ? partyContracts[0] : undefined;
+    // Do not infer a contract from partyId alone. Unlinked legacy payments
+    // must stay out of Outflow to avoid counting duplicate historical entries.
+    return undefined;
   };
 
   const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
