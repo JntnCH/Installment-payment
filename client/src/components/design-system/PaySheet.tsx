@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, CheckCircle2 } from "lucide-react";
 import { Money } from "./Money";
 import { Button } from "./Button";
+import { toast } from "sonner";
 
 export interface PaySheetProps {
   open: boolean;
@@ -48,10 +49,11 @@ export const PaySheet: React.FC<PaySheetProps> = ({
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) return;
     const dueAmount = Number(totalDue ?? defaultAmount);
-    if (type === "pay" && numAmount > dueAmount) {
-      throw new Error("ยอดชำระต้องไม่เกินยอดค่างวดคงเหลือ");
+    if (type === "pay" && Math.round(numAmount * 100) > Math.round(dueAmount * 100)) {
+      toast.error("ยอดชำระต้องไม่เกินยอดค่างวดคงเหลือ");
+      return;
     }
-    if (type === "pay" && paymentMode === "full" && numAmount !== dueAmount) {
+    if (type === "pay" && paymentMode === "full" && Math.round(numAmount * 100) !== Math.round(dueAmount * 100)) {
       setAmount(String(dueAmount));
       return;
     }
