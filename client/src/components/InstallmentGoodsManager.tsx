@@ -1082,6 +1082,7 @@ export default function InstallmentGoodsManager() {
           title={`จ่ายค่างวด: ${activePaySchedule.contractTitle}`}
           subtitle={`งวดที่ ${activePaySchedule.installmentNo} (บันทึกรายจ่าย - จ่ายออก)`}
           defaultAmount={activePaySchedule.amount}
+          totalDue={activePaySchedule.amount}
           type="pay"
         />
       )}
