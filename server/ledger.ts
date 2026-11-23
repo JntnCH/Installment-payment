@@ -1111,12 +1111,6 @@ export async function getDashboardStats(ownerId: number) {
   }
 
   const contractMap = new Map(allContracts.map(c => [c.id, c]));
-  const contractsByParty = new Map<string, ContractRow[]>();
-  for (const contract of allContracts) {
-    const partyContracts = contractsByParty.get(contract.partyId) ?? [];
-    partyContracts.push(contract);
-    contractsByParty.set(contract.partyId, partyContracts);
-  }
   const scheduleMap = new Map(allSchedules.map(schedule => [schedule.id, schedule]));
   const resolveTransactionContract = (transaction: TransactionRow): ContractRow | undefined => {
     const linkedContract = transaction.contractId
