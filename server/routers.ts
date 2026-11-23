@@ -88,7 +88,6 @@ function emptyStats(): DashboardStats {
     creditorOutstanding: 0,
     totalInflow: 0,
     totalOutflow: 0,
-    outflowAudit: [],
     projectedInterest: 0,
     overdue: { count: 0, amount: 0 },
     today: { count: 0, amount: 0 },
