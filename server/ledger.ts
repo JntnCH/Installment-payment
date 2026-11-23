@@ -1111,12 +1111,6 @@ export async function getDashboardStats(ownerId: number) {
   }
 
   const contractMap = new Map(allContracts.map(c => [c.id, c]));
-  const contractsByParty = new Map<string, ContractRow[]>();
-  for (const contract of allContracts) {
-    const partyContracts = contractsByParty.get(contract.partyId) ?? [];
-    partyContracts.push(contract);
-    contractsByParty.set(contract.partyId, partyContracts);
-  }
   const scheduleMap = new Map(allSchedules.map(schedule => [schedule.id, schedule]));
   const resolveTransactionContract = (transaction: TransactionRow): ContractRow | undefined => {
     const linkedContract = transaction.contractId
@@ -1132,8 +1126,9 @@ export async function getDashboardStats(ownerId: number) {
       if (scheduleContract?.partyId === transaction.partyId) return scheduleContract;
     }
 
-    const partyContracts = contractsByParty.get(transaction.partyId) ?? [];
-    return partyContracts.length === 1 ? partyContracts[0] : undefined;
+    // Do not infer a contract from partyId alone. Unlinked legacy payments
+    // must stay out of Outflow to avoid counting duplicate historical entries.
+    return undefined;
   };
 
   const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
