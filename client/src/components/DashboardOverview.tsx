@@ -415,7 +415,7 @@ export default function DashboardOverview({
           onClose={() => setActivePayItem(null)}
           title={activePayItem.title}
           subtitle={activePayItem.subtitle}
-          amount={activePayItem.amount}
+          defaultAmount={activePayItem.amount}
           type="receive"
           onConfirm={handleConfirmPay}
         />
