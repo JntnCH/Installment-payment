@@ -147,7 +147,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
             />
           </div>
 
-          <div className="w-full min-w-0">
+          <div className="block w-full min-w-0 max-w-full overflow-hidden">
             <label className="block text-xs font-medium text-[#1C1917] mb-1.5">
               วันที่ทำรายการ *
             </label>
@@ -156,7 +156,8 @@ export const PaySheet: React.FC<PaySheetProps> = ({
               required
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="payment-date-input block box-border min-w-0 w-full max-w-full h-11 px-3.5 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:ring-1 focus:ring-[#1C1917]"
+              style={{ display: "block", width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
+              className="payment-date-input h-11 px-3.5 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:ring-1 focus:ring-[#1C1917]"
             />
           </div>
 
