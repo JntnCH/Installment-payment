@@ -646,16 +646,6 @@ export default function IndividualLedger({
               icon={<Users className="w-4 h-4" />}
             />
             <StatCard
-              label={isDebtor ? "ทิศทางกระแสเงิน (เมื่อชำระ)" : "ทิศทางกระแสเงิน (เมื่อชำระ)"}
-              rawDisplay={
-                <span className={`text-2xl font-bold font-mono ${isDebtor ? "text-[#16A34A]" : "text-[#DC2626]"}`}>
-                  {isDebtor ? "📥 รับเข้า (Inflow)" : "💸 จ่ายออก (Outflow)"}
-                </span>
-              }
-              subtitle={isDebtor ? "ลูกหนี้จ่ายคืน -> เข้ากระเป๋าเรา" : "จ่ายคืนเงินกู้ -> ออกจากกระเป๋าเรา"}
-              accentBar={isDebtor ? "income" : "expense"}
-            />
-            <StatCard
               label="การจัดการสัญญา & วงกลมกลาง"
               rawDisplay={
                 <span className="text-2xl font-bold font-mono text-[#1C1917]">
