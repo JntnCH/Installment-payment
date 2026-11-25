@@ -4,7 +4,6 @@ import {
   Plus,
   Calendar,
   CreditCard,
-  Percent,
   CheckCircle2,
   Clock,
   Trash2,
@@ -314,42 +313,6 @@ export default function InstallmentGoodsManager() {
           </Button>
         }
       />
-
-      {/* 2. Top Stats Overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard
-          label="สถานะของฉันในหน้านี้"
-          rawDisplay={
-            <span className="text-xl font-bold font-mono text-rose-600">
-              ฉันเป็นผู้ผ่อน (ลูกหนี้)
-            </span>
-          }
-          subtitle="ชำระค่างวดสินค้า = บันทึกจ่ายออก (Outflow)"
-          icon={<ShoppingBag className="w-4 h-4 text-rose-500" />}
-          accentBar="expense"
-        />
-        <StatCard
-          label="ร้านค้า / แพลตฟอร์มผ่อน"
-          rawDisplay={
-            <span className="text-2xl font-bold font-mono text-[#1C1917]">
-              {parties.length} แหล่ง
-            </span>
-          }
-          subtitle="Shopee, SpayLater, บัตรเครดิต, ร้านค้า"
-          icon={<Store className="w-4 h-4 text-[#78716C]" />}
-        />
-        <StatCard
-          label="วิธีคำนวณค่างวดสินค้า"
-          rawDisplay={
-            <span className="text-xl font-bold font-mono text-[#3F6B4B]">
-              Flat Rate / 0%
-            </span>
-          }
-          subtitle="คำนวณเงินดาวน์ ดอกเบี้ย และแบ่งงวดเท่ากันทุกเดือน"
-          icon={<Percent className="w-4 h-4 text-[#3F6B4B]" />}
-          accentBar="income"
-        />
-      </div>
 
       {/* 3. Main Workspace: Store/Contract List & Active Contract View */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
