@@ -189,6 +189,13 @@ export default function DashboardOverview({
           accentBar="income"
           sentiment="income"
         />
+        <StatCard
+          label="เงินจ่ายออกสะสม (Outflow)"
+          amount={stats?.totalOutflow ?? 0}
+          subtitle="รวมยอดชำระหนี้สิน + ค่างวดผ่อนสินค้า"
+          accentBar="expense"
+          sentiment="expense"
+        />
       </div>
 
       {/* 3. Hero Ledger Overview Box */}
