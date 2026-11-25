@@ -44,18 +44,20 @@
   /* Prevent iOS Safari date controls from using intrinsic width beyond the form. */
   .payment-date-input {
     display: block;
-    inline-size: 100%;
-    min-inline-size: 0;
-    max-inline-size: 100%;
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-    box-sizing: border-box;
+    inline-size: 100% !important;
+    min-inline-size: 0 !important;
+    max-inline-size: 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    flex: 1 1 0%;
     -webkit-appearance: none;
     appearance: none;
   }
 
   .payment-date-input::-webkit-date-and-time-value {
+    width: 100%;
     min-width: 0;
     text-align: left;
   }
