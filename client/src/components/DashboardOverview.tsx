@@ -84,7 +84,7 @@ export default function DashboardOverview({
     const monthOf = (value: unknown) => {
       if (!value) return "";
       const raw = String(value);
-      if (/^\\d{4}-\\d{2}/.test(raw)) return raw.slice(0, 7);
+      if (/^\d{4}-\d{2}/.test(raw)) return raw.slice(0, 7);
       const date = new Date(raw);
       return Number.isNaN(date.getTime())
         ? ""
@@ -96,7 +96,7 @@ export default function DashboardOverview({
       const amount = Number(tx.amount || 0);
       if (!Number.isFinite(amount)) continue;
       const month = monthOf(tx.date);
-      if (!/^\\d{4}-\\d{2}$/.test(month)) continue;
+      if (!/^\d{4}-\d{2}$/.test(month)) continue;
       const row = monthly.get(month) || { month, inflow: 0, outflow: 0 };
       if (type === "income" || type === "payment" || type.includes("รายรับ") || type.includes("รับ")) {
         row.inflow += amount;
