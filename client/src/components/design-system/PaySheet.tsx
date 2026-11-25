@@ -130,7 +130,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
               <p className="text-[11px] text-[#78716C]">ยอดค่างวดคงเหลือ ฿{Number(totalDue ?? defaultAmount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
             </div>
           )}
-          <div>
+          <div className="w-full min-w-0">
             <label className="block text-xs font-medium text-[#1C1917] mb-1.5">
               จำนวนเงินที่บันทึก (บาท) *
             </label>
@@ -143,11 +143,11 @@ export const PaySheet: React.FC<PaySheetProps> = ({
               onChange={(e) => setAmount(e.target.value)}
               max={type === "pay" ? (totalDue ?? defaultAmount) : undefined}
               disabled={type === "pay" && paymentMode === "full"}
-              className="box-border min-w-0 w-full max-w-full h-11 px-3.5 bg-white border border-[#1C1917]/15 rounded-[10px] text-base font-mono font-semibold tabular-nums text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:ring-1 focus:ring-[#1C1917]"
+              className="block box-border min-w-0 w-full max-w-full h-11 px-3.5 bg-white border border-[#1C1917]/15 rounded-[10px] text-base font-mono font-semibold tabular-nums text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:ring-1 focus:ring-[#1C1917]"
             />
           </div>
 
-          <div>
+          <div className="w-full min-w-0">
             <label className="block text-xs font-medium text-[#1C1917] mb-1.5">
               วันที่ทำรายการ *
             </label>
@@ -157,11 +157,10 @@ export const PaySheet: React.FC<PaySheetProps> = ({
               value={date}
               onChange={(e) => setDate(e.target.value)}
               className="block box-border min-w-0 w-full max-w-full h-11 px-3.5 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:ring-1 focus:ring-[#1C1917]"
-              style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
             />
           </div>
 
-          <div>
+          <div className="w-full min-w-0">
             <label className="block text-xs font-medium text-[#1C1917] mb-1.5">
               บันทึกช่วยจำ (ไม่บังคับ)
             </label>
@@ -170,11 +169,11 @@ export const PaySheet: React.FC<PaySheetProps> = ({
               placeholder="เช่น โอนผ่านพร้อมเพย์, ชำระหน้างวด"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full h-11 px-3.5 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:ring-1 focus:ring-[#1C1917]"
+              className="block box-border min-w-0 w-full max-w-full h-11 px-3.5 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:ring-1 focus:ring-[#1C1917]"
             />
           </div>
 
-          <div>
+          <div className="w-full min-w-0">
             <label className="block text-xs font-medium text-[#1C1917] mb-1.5">
               แนบสลิป / หลักฐาน (ไม่บังคับ)
             </label>
@@ -182,7 +181,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
               type="file"
               accept="image/jpeg,image/png,image/webp,application/pdf"
               onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-              className="w-full text-xs"
+              className="block box-border min-w-0 w-full max-w-full text-xs"
             />
             <p className="text-[11px] text-[#78716C] mt-1">
               {receiptFile ? `${receiptFile.name} · ${(receiptFile.size / 1024 / 1024).toFixed(2)} MB` : "JPG, PNG, WEBP หรือ PDF ขนาดไม่เกิน 8 MB"}
