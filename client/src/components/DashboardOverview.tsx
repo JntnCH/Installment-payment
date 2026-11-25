@@ -66,7 +66,6 @@ export default function DashboardOverview({
 }: DashboardOverviewProps) {
   const statsQuery = trpc.ledger.getStats.useQuery();
   const sheetsTransactionsQuery = trpc.sheets.listTransactions.useQuery({ limit: 500 }, { retry: 1 });
-  const monthlyBillsQuery = trpc.monthlyBills.list.useQuery();
   const markPaidMutation = trpc.ledger.markSchedulePaid.useMutation();
   const uploadReceiptMutation = trpc.ledger.uploadReceipt.useMutation();
   const utils = trpc.useUtils();
@@ -82,36 +81,31 @@ export default function DashboardOverview({
 
   const monthlyCashflow = useMemo(() => {
     const monthly = new Map<string, { month: string; inflow: number; outflow: number }>();
-    const add = (month: string, type: "inflow" | "outflow", amount: number) => {
-      if (!/^\d{4}-\d{2}$/.test(month) || !Number.isFinite(amount)) return;
-      const row = monthly.get(month) || { month, inflow: 0, outflow: 0 };
-      row[type] += amount;
-      monthly.set(month, row);
-    };
     const monthOf = (value: unknown) => {
       if (!value) return "";
       const raw = String(value);
-      if (/^\d{4}-\d{2}/.test(raw)) return raw.slice(0, 7);
+      if (/^\\d{4}-\\d{2}/.test(raw)) return raw.slice(0, 7);
       const date = new Date(raw);
       return Number.isNaN(date.getTime())
         ? ""
         : new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit" }).format(date);
     };
 
-    for (const row of stats?.monthlyCashflow ?? []) {
-      add(row.month, "inflow", Number(row.inflow || 0));
-      add(row.month, "outflow", Number(row.outflow || 0));
-    }
-
     for (const tx of sheetsTransactionsQuery.data?.data ?? []) {
-      const type = String(tx.type || "").toLowerCase();
-      const isIncome = type === "income" || type === "payment" || type.includes("รับ");
-      add(monthOf(tx.date), isIncome ? "inflow" : "outflow", Number(tx.amount || 0));
-    }
-
-    for (const bill of monthlyBillsQuery.data ?? []) {
-      if (bill.status !== "paid" || !bill.paidAt) continue;
-      add(monthOf(bill.paidAt), "outflow", Number(bill.paidAmount ?? bill.amount ?? 0));
+      const type = String(tx.type || "").trim().toLowerCase();
+      const amount = Number(tx.amount || 0);
+      if (!Number.isFinite(amount)) continue;
+      const month = monthOf(tx.date);
+      if (!/^\\d{4}-\\d{2}$/.test(month)) continue;
+      const row = monthly.get(month) || { month, inflow: 0, outflow: 0 };
+      if (type === "income" || type === "payment" || type.includes("รายรับ") || type.includes("รับ")) {
+        row.inflow += amount;
+      } else if (type === "expense" || type.includes("รายจ่าย") || type.includes("จ่าย")) {
+        row.outflow += amount;
+      } else {
+        continue;
+      }
+      monthly.set(month, row);
     }
 
     let balance = 0;
@@ -122,7 +116,7 @@ export default function DashboardOverview({
         return { ...row, balance };
       })
       .slice(-12);
-  }, [stats?.monthlyCashflow, sheetsTransactionsQuery.data?.data, monthlyBillsQuery.data]);
+  }, [sheetsTransactionsQuery.data?.data]);
 
   const handleConfirmPay = async (data: {
     amount: number;
@@ -408,7 +402,7 @@ export default function DashboardOverview({
         <div className="bg-[#FFFCF8] rounded-[20px] border border-[#1C1917]/10 p-6 space-y-4">
           <div>
             <h3 className="text-sm font-semibold text-[#1C1917]">กระแสเงินสดจริงรายเดือน</h3>
-            <p className="text-xs text-[#78716C]">รวมแท็บรับ-จ่าย · รับชำระลูกหนี้/เงินกู้ · บิลรายเดือนที่จ่ายแล้ว</p>
+            <p className="text-xs text-[#78716C]">คำนวณจากรายการรับ-จ่ายเท่านั้น</p>
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-[#78716C]">
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#3F6B4B]" />เงินเข้า</span>
@@ -446,7 +440,7 @@ export default function DashboardOverview({
               );
             })}
           </div>
-          {(sheetsTransactionsQuery.isError || monthlyBillsQuery.isError) && (
+          {sheetsTransactionsQuery.isError && (
             <p className="text-[11px] text-[#A33B2B]">บางแหล่งข้อมูลยังโหลดไม่สำเร็จ กราฟจะแสดงเฉพาะข้อมูลที่อ่านได้</p>
           )}
         </div>
