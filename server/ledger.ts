@@ -1281,41 +1281,26 @@ export async function getDashboardStats(ownerId: number) {
 
   let totalInflow = 0;
   let totalOutflow = 0;
-  const monthlyCashflowMap = new Map<string, { month: string; inflow: number; outflow: number }>();
 
   for (const t of allTransactions) {
     const amt = asAmount(t.amount);
     const party = partyMap.get(t.partyId);
     const isCreditor = party?.role === "creditor";
     const contract = resolveTransactionContract(t);
-    const month = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Bangkok",
-      year: "numeric",
-      month: "2-digit",
-    }).format(t.occurredAt);
-    const monthly = monthlyCashflowMap.get(month) || { month, inflow: 0, outflow: 0 };
 
     if (t.type === "payment" && isCreditor && contract) {
       // Outflow includes only creditor payments linked to a liability or product-installment contract.
       // Resolve missing contractId only through its schedule or a single unambiguous party contract.
       totalOutflow += amt;
-      monthly.outflow += amt;
     } else if ((t.type === "payment" && party?.role === "debtor") || (t.type === "disbursement" && isCreditor)) {
       // Only debtor payments received and creditor disbursements are inflow.
       // Unresolved creditor payments must not be reclassified as income.
       totalInflow += amt;
-      monthly.inflow += amt;
     } else if (t.type === "adjustment" && amt >= 0) {
       // Positive adjustments remain inflow; negative adjustments are excluded from Outflow.
       totalInflow += amt;
-      monthly.inflow += amt;
     }
-
-    monthlyCashflowMap.set(month, monthly);
   }
-
-  const monthlyCashflow = Array.from(monthlyCashflowMap.values())
-    .sort((a, b) => a.month.localeCompare(b.month));
 
   const monthlyTimelineMap = new Map<string, { month: string; scheduled: number; collected: number; pending: number }>();
   for (const s of allSchedules) {
@@ -1361,7 +1346,6 @@ export async function getDashboardStats(ownerId: number) {
     soon: { count: soonCount, amount: soonAmount },
     alerts,
     monthlyTimeline,
-    monthlyCashflow,
     recentTransactions: allTransactions
       .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
       .slice(0, 10)
