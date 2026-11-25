@@ -41,6 +41,25 @@
     font: inherit;
   }
 
+  /* Prevent iOS Safari date controls from using intrinsic width beyond the form. */
+  .payment-date-input {
+    display: block;
+    inline-size: 100%;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .payment-date-input::-webkit-date-and-time-value {
+    min-width: 0;
+    text-align: left;
+  }
+
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
     outline: 2px solid #2563EB;
     outline-offset: 2px;
