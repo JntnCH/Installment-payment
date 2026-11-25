@@ -83,7 +83,7 @@ export default function DashboardOverview({
   const monthlyCashflow = useMemo(() => {
     const monthly = new Map<string, { month: string; inflow: number; outflow: number }>();
     const add = (month: string, type: "inflow" | "outflow", amount: number) => {
-      if (!/^\\d{4}-\\d{2}$/.test(month) || !Number.isFinite(amount)) return;
+      if (!/^\d{4}-\d{2}$/.test(month) || !Number.isFinite(amount)) return;
       const row = monthly.get(month) || { month, inflow: 0, outflow: 0 };
       row[type] += amount;
       monthly.set(month, row);
@@ -91,7 +91,7 @@ export default function DashboardOverview({
     const monthOf = (value: unknown) => {
       if (!value) return "";
       const raw = String(value);
-      if (/^\\d{4}-\\d{2}/.test(raw)) return raw.slice(0, 7);
+      if (/^\d{4}-\d{2}/.test(raw)) return raw.slice(0, 7);
       const date = new Date(raw);
       return Number.isNaN(date.getTime())
         ? ""
