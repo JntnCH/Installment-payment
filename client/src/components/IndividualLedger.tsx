@@ -633,31 +633,6 @@ export default function IndividualLedger({
       ) : (
         /* 3. When SubTab is Borrowed or Lent -> Render Full Ledger Hub */
         <div className="space-y-6 animate-in fade-in duration-200">
-          {/* Top Stat Overview Cards for this specific role */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatCard
-              label={isDebtor ? "จำนวนลูกหนี้ทั้งหมด" : "จำนวนเจ้าหนี้ & บิลทั้งหมด"}
-              rawDisplay={
-                <span className="text-2xl font-bold font-mono text-[#1C1917]">
-                  {rawParties.length} ราย
-                </span>
-              }
-              subtitle={isDebtor ? "ลูกหนี้ที่รอติดตามเรียกเก็บ" : "เจ้าหนี้และบิลที่ต้องทยอยจ่าย"}
-              icon={<Users className="w-4 h-4" />}
-            />
-            <StatCard
-              label="การจัดการสัญญา & วงกลมกลาง"
-              rawDisplay={
-                <span className="text-2xl font-bold font-mono text-[#1C1917]">
-                  แก้ไขได้ทุกส่วน
-                </span>
-              }
-              subtitle="แก้ไขชื่อ, เงินต้น, วันที่, ยอดผ่อน และสถานะได้ทันที"
-              icon={<Edit2 className="w-4 h-4 text-[#D97706]" />}
-              accentBar="due"
-            />
-          </div>
-
           {/* Main Grid: Left Column (Party List) & Right Column (Contracts & Middle Editable Circle) */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Left Column: Party List */}
