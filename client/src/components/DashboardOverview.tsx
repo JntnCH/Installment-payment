@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   TrendingUp,
   Plus,
@@ -65,6 +65,7 @@ export default function DashboardOverview({
   onOpenContract,
 }: DashboardOverviewProps) {
   const statsQuery = trpc.ledger.getStats.useQuery();
+  const sheetsTransactionsQuery = trpc.sheets.listTransactions.useQuery({ limit: 500 }, { retry: 1 });
   const markPaidMutation = trpc.ledger.markSchedulePaid.useMutation();
   const uploadReceiptMutation = trpc.ledger.uploadReceipt.useMutation();
   const utils = trpc.useUtils();
@@ -77,6 +78,45 @@ export default function DashboardOverview({
   } | null>(null);
 
   const stats = statsQuery.data;
+
+  const monthlyCashflow = useMemo(() => {
+    const monthly = new Map<string, { month: string; inflow: number; outflow: number }>();
+    const monthOf = (value: unknown) => {
+      if (!value) return "";
+      const raw = String(value);
+      if (/^\d{4}-\d{2}/.test(raw)) return raw.slice(0, 7);
+      const date = new Date(raw);
+      return Number.isNaN(date.getTime())
+        ? ""
+        : new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit" }).format(date);
+    };
+
+    for (const tx of sheetsTransactionsQuery.data?.data ?? []) {
+      const type = String(tx.type || "").trim().toLowerCase();
+      const amount = Number(tx.amount || 0);
+      if (!Number.isFinite(amount)) continue;
+      const month = monthOf(tx.date);
+      if (!/^\d{4}-\d{2}$/.test(month)) continue;
+      const row = monthly.get(month) || { month, inflow: 0, outflow: 0 };
+      if (type === "income" || type === "payment" || type.includes("รายรับ") || type.includes("รับ")) {
+        row.inflow += amount;
+      } else if (type === "expense" || type.includes("รายจ่าย") || type.includes("จ่าย")) {
+        row.outflow += amount;
+      } else {
+        continue;
+      }
+      monthly.set(month, row);
+    }
+
+    let balance = 0;
+    return Array.from(monthly.values())
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .map(row => {
+        balance += row.inflow - row.outflow;
+        return { ...row, balance };
+      })
+      .slice(-12);
+  }, [sheetsTransactionsQuery.data?.data]);
 
   const handleConfirmPay = async (data: {
     amount: number;
@@ -357,13 +397,62 @@ export default function DashboardOverview({
         </div>
       </div>
 
-      {/* 5. Monthly Cashflow Projection Chart */}
+      {/* 5. Actual Monthly Cashflow Chart */}
+      {monthlyCashflow.length > 0 && (
+        <div className="bg-[#FFFCF8] rounded-[20px] border border-[#1C1917]/10 p-6 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-[#1C1917]">กระแสเงินสดจริงรายเดือน</h3>
+            <p className="text-xs text-[#78716C]">คำนวณจากรายการรับ-จ่ายเท่านั้น</p>
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-[#78716C]">
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#3F6B4B]" />เงินเข้า</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#A33B2B]" />เงินออก</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#2563EB]" />เงินคงเหลือสะสม</span>
+          </div>
+          <div className="space-y-4">
+            {monthlyCashflow.map((item) => {
+              const maxAmount = Math.max(1, item.inflow, item.outflow, Math.abs(item.balance));
+              const money = (value: number) => "฿" + value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
+              return (
+                <div key={item.month} className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold text-[#1C1917]">{new Date(item.month + "-01T00:00:00").toLocaleDateString("th-TH", { month: "short", year: "numeric" })}</span>
+                    <span className={`text-xs font-mono tabular-nums ${item.balance >= 0 ? "text-[#2563EB]" : "text-[#A33B2B]"}`}>คงเหลือ {money(item.balance)}</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-12 shrink-0 text-[10px] text-[#78716C]">เข้า</span>
+                      <div className="h-2 flex-1 rounded-full bg-[#1C1917]/5 overflow-hidden"><div className="h-full rounded-full bg-[#3F6B4B]" style={{ width: (Math.min(100, item.inflow / maxAmount * 100) + "%") }} /></div>
+                      <span className="w-24 shrink-0 text-right text-[10px] font-mono tabular-nums">{money(item.inflow)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-12 shrink-0 text-[10px] text-[#78716C]">ออก</span>
+                      <div className="h-2 flex-1 rounded-full bg-[#1C1917]/5 overflow-hidden"><div className="h-full rounded-full bg-[#A33B2B]" style={{ width: (Math.min(100, item.outflow / maxAmount * 100) + "%") }} /></div>
+                      <span className="w-24 shrink-0 text-right text-[10px] font-mono tabular-nums">{money(item.outflow)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-12 shrink-0 text-[10px] text-[#78716C]">คงเหลือ</span>
+                      <div className="h-2 flex-1 rounded-full bg-[#1C1917]/5 overflow-hidden"><div className={`h-full rounded-full ${item.balance >= 0 ? "bg-[#2563EB]" : "bg-[#A33B2B]"}`} style={{ width: (Math.min(100, Math.abs(item.balance) / maxAmount * 100) + "%") }} /></div>
+                      <span className="w-24 shrink-0 text-right text-[10px] font-mono tabular-nums">{money(item.balance)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {sheetsTransactionsQuery.isError && (
+            <p className="text-[11px] text-[#A33B2B]">บางแหล่งข้อมูลยังโหลดไม่สำเร็จ กราฟจะแสดงเฉพาะข้อมูลที่อ่านได้</p>
+          )}
+        </div>
+      )}
+
+      {/* 6. Existing Repayment Projection Chart (preserved) */}
       {stats?.monthlyTimeline && stats.monthlyTimeline.length > 0 && (
         <div className="bg-[#FFFCF8] rounded-[20px] border border-[#1C1917]/10 p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-[#1C1917]">
-                ประมาณการยอดเรียกเก็บรายเดือน (Monthly Cashflow)
+                ประมาณการยอดเรียกเก็บรายเดือน (Repayment Projection)
               </h3>
               <p className="text-xs text-[#78716C]">
                 เปรียบเทียบยอดที่กำหนดเรียกเก็บ กับยอดที่เก็บได้แล้วจริง
