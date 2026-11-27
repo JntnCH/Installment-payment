@@ -4,11 +4,13 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 type Bill = { id: string; billName: string; amount: string | number; dueDate: string; status: "pending" | "paid"; note: string | null; paidAt?: Date | string | null; paidAmount?: string | number | null; receiptKey?: string | null };
+type BillPayment = { billId: string; monthKey: string; paidAmount: string | number; paidAt: Date | string; receiptKey?: string | null };
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function MonthlyBillsManager() {
   const utils = trpc.useUtils();
   const billsQuery = trpc.monthlyBills.list.useQuery();
+  const paymentsQuery = trpc.monthlyBills.paymentHistory.useQuery();
   const sheetsStatus = trpc.monthlyBills.googleStatus.useQuery();
   const configureSheets = trpc.monthlyBills.configureGoogleSpreadsheet.useMutation({
     onSuccess: async () => { await sheetsStatus.refetch(); toast.success("บันทึกการเชื่อมต่อ Google Sheets แล้ว"); },
@@ -23,7 +25,7 @@ export default function MonthlyBillsManager() {
   const updateBill = trpc.monthlyBills.update.useMutation({ onSuccess: async () => { await utils.monthlyBills.list.invalidate(); toast.success("แก้ไขบิลแล้ว"); reset(); } });
   const deleteBill = trpc.monthlyBills.delete.useMutation({ onSuccess: async () => { await utils.monthlyBills.list.invalidate(); toast.success("ลบบิลแล้ว"); } });
   const uploadReceipt = trpc.monthlyBills.uploadReceipt.useMutation();
-  const recordPayment = trpc.monthlyBills.recordPayment.useMutation({ onSuccess: async () => { await utils.monthlyBills.list.invalidate(); setPaymentBill(null); setReceiptFile(null); toast.success("บันทึกการชำระบิลแล้ว"); }, onError: error => toast.error(error.message) });
+  const recordPayment = trpc.monthlyBills.recordPayment.useMutation({ onSuccess: async () => { await Promise.all([utils.monthlyBills.list.invalidate(), utils.monthlyBills.paymentHistory.invalidate()]); setPaymentBill(null); setReceiptFile(null); toast.success("บันทึกการชำระบิลแล้ว"); }, onError: error => toast.error(error.message) });
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
   const [paidAmount, setPaidAmount] = useState("");
   const [paidDate, setPaidDate] = useState(today());
@@ -36,6 +38,9 @@ export default function MonthlyBillsManager() {
   const [note, setNote] = useState("");
   const reset = () => { setEditing(null); setBillName(""); setAmount(""); setDueDate(today()); setStatus("pending"); setNote(""); };
   const bills = billsQuery.data ?? [];
+  const payments: BillPayment[] = paymentsQuery.data ?? [];
+  const currentMonth = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit" }).format(new Date());
+  const getCurrentMonthPayment = (billId: string) => payments.find(payment => payment.billId === billId && payment.monthKey === currentMonth);
   const totalPending = useMemo(() => bills.filter(b => b.status === "pending").reduce((sum, b) => sum + Number(b.amount), 0), [bills]);
   const submitPayment = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -118,8 +123,8 @@ export default function MonthlyBillsManager() {
       {billsQuery.isLoading ? <div className="p-8 text-center text-stone-500">กำลังโหลด...</div> : bills.length === 0 ? <div className="p-8 text-center text-stone-500"><CalendarDays className="mx-auto mb-2" />ยังไม่มีบิลรายเดือน</div> :
       <div className="divide-y">{bills.map((bill: Bill)=><div key={bill.id} className="p-4 flex flex-wrap items-center gap-3 justify-between">
         <div className="min-w-0 flex-1"><div className="font-semibold">{bill.billName}</div><div className="text-xs text-stone-500 mt-1">ครบกำหนด {new Date(bill.dueDate+"T00:00:00").toLocaleDateString("th-TH")} {bill.note ? "· "+bill.note : ""}</div></div>
-        <div className="text-right"><div className="font-semibold">฿{Number(bill.amount).toLocaleString("th-TH",{minimumFractionDigits:2})}</div><span className={bill.status==="paid"?"text-emerald-700":"text-amber-700"}>{bill.status==="paid"?"ชำระแล้ว":"รอชำระ"}</span>{bill.status==="paid" && <div className="text-xs text-stone-500 mt-1">จ่ายจริง ฿{Number(bill.paidAmount ?? bill.amount).toLocaleString("th-TH",{minimumFractionDigits:2})}{bill.paidAt ? " · "+(bill.paidAt instanceof Date ? bill.paidAt : new Date(bill.paidAt)).toLocaleDateString("th-TH") : ""}<div className={Number(bill.paidAmount ?? bill.amount)-Number(bill.amount)===0?"text-emerald-700":Number(bill.paidAmount ?? bill.amount)>Number(bill.amount)?"text-amber-700":"text-rose-700"}>ส่วนต่าง {Number(bill.paidAmount ?? bill.amount)-Number(bill.amount)>0?"+":""}฿{(Number(bill.paidAmount ?? bill.amount)-Number(bill.amount)).toLocaleString("th-TH",{minimumFractionDigits:2})}</div></div>}{bill.receiptKey && <a className="text-xs text-blue-700 underline block mt-1" href={"/manus-storage/"+bill.receiptKey} target="_blank" rel="noreferrer">ดูหลักฐาน</a>}</div>
-        <div className="flex gap-1">{bill.status !== "paid" && <button onClick={()=>{setPaymentBill(bill);setPaidAmount(String(bill.amount));setPaidDate(today());setReceiptFile(null);}} className="rounded-lg bg-emerald-700 text-white px-3 py-2 text-xs flex items-center gap-1"><CheckCircle2 size={15}/>ชำระบิล</button>}<button onClick={()=>startEdit(bill)} className="p-2 rounded-lg border" aria-label="แก้ไข"><Pencil size={16}/></button><button onClick={()=>{if(confirm("ยืนยันลบบิลนี้?")) deleteBill.mutate({id:bill.id});}} className="p-2 rounded-lg border text-red-600" aria-label="ลบ"><Trash2 size={16}/></button></div>
+        <div className="text-right"><div className="font-semibold">฿{Number(bill.amount).toLocaleString("th-TH",{minimumFractionDigits:2})}</div><span className={getCurrentMonthPayment(bill.id)?"text-emerald-700":"text-amber-700"}>{getCurrentMonthPayment(bill.id)?"ชำระแล้ว":"รอชำระ"}</span>{getCurrentMonthPayment(bill.id) && <div className="text-xs text-stone-500 mt-1">จ่ายจริง ฿{Number(getCurrentMonthPayment(bill.id)?.paidAmount ?? bill.amount).toLocaleString("th-TH",{minimumFractionDigits:2})}{getCurrentMonthPayment(bill.id)?.paidAt ? " · "+new Date(getCurrentMonthPayment(bill.id)!.paidAt).toLocaleDateString("th-TH") : ""}<div className={Number(getCurrentMonthPayment(bill.id)?.paidAmount ?? bill.amount)-Number(bill.amount)===0?"text-emerald-700":Number(getCurrentMonthPayment(bill.id)?.paidAmount ?? bill.amount)>Number(bill.amount)?"text-amber-700":"text-rose-700"}>ส่วนต่าง {Number(getCurrentMonthPayment(bill.id)?.paidAmount ?? bill.amount)-Number(bill.amount)>0?"+":""}฿{(Number(getCurrentMonthPayment(bill.id)?.paidAmount ?? bill.amount)-Number(bill.amount)).toLocaleString("th-TH",{minimumFractionDigits:2})}</div></div>}{getCurrentMonthPayment(bill.id)?.receiptKey && <a className="text-xs text-blue-700 underline block mt-1" href={"/manus-storage/"+getCurrentMonthPayment(bill.id)?.receiptKey} target="_blank" rel="noreferrer">ดูหลักฐาน</a>}</div>
+        <div className="flex gap-1">{!getCurrentMonthPayment(bill.id) && <button onClick={()=>{setPaymentBill(bill);setPaidAmount(String(bill.amount));setPaidDate(today());setReceiptFile(null);}} className="rounded-lg bg-emerald-700 text-white px-3 py-2 text-xs flex items-center gap-1"><CheckCircle2 size={15}/>ชำระบิล</button>}<button onClick={()=>startEdit(bill)} className="p-2 rounded-lg border" aria-label="แก้ไข"><Pencil size={16}/></button><button onClick={()=>{if(confirm("ยืนยันลบบิลนี้?")) deleteBill.mutate({id:bill.id});}} className="p-2 rounded-lg border text-red-600" aria-label="ลบ"><Trash2 size={16}/></button></div>
       </div>)}</div>}
     </section>
     {paymentBill && <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="บันทึกการชำระบิล">
@@ -132,6 +137,6 @@ export default function MonthlyBillsManager() {
         <div className="flex gap-2"><button type="submit" disabled={recordPayment.isPending || uploadReceipt.isPending} className="flex-1 rounded-lg bg-emerald-700 text-white px-4 py-2.5 text-sm disabled:opacity-50">{recordPayment.isPending || uploadReceipt.isPending ? "กำลังบันทึก..." : "ยืนยันการชำระ"}</button><button type="button" onClick={()=>setPaymentBill(null)} className="rounded-lg border px-4 py-2.5 text-sm">ยกเลิก</button></div>
       </form>
     </div>}
-    <p className="text-xs text-stone-500">ข้อมูลหลักบันทึกใน Railway Database และระบบจะส่งไปยังแท็บ “บิลรายเดือน” ใน Google Sheets อัตโนมัติ</p>
+    <p className="text-xs text-stone-500">ข้อมูลการชำระแต่ละเดือนจะถูกบันทึกในฐานข้อมูล และส่งเป็นรายการรายจ่ายไปยังชีตธุรกรรมเดิม</p>
   </div>;
 }
