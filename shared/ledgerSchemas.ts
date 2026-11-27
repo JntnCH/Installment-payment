@@ -37,6 +37,7 @@ export const contractInputSchema = z.object({
 });
 
 export const transactionInputSchema = z.object({
+  transactionId: z.string().uuid().optional(),
   partyId: z.string().trim().min(1).max(64),
   contractId: z.string().trim().min(1).max(64).optional(),
   scheduleId: z.string().trim().min(1).max(64).optional(),
