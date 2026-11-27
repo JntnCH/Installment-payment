@@ -107,7 +107,7 @@ export async function recordMonthlyBillPayment(ownerId: number, input: { id: str
   const paidBeforeCents = previousPayments.reduce((sum, payment) => sum + Math.round(Number(payment.paidAmount) * 100), 0) - (alreadyRecorded ? Math.round(Number(alreadyRecorded.paidAmount) * 100) : 0);
   const paidTotalCents = paidBeforeCents + Math.round(input.paidAmount * 100);
   const billAmountCents = Math.round(Number(bill.amount) * 100);
-  if (paidTotalCents > billAmountCents) throw new Error("ยอดชำระสะสมเกินยอดบิล กรุณาตรวจสอบยอดคงเหลือ");
+  if (!alreadyRecorded && paidTotalCents > billAmountCents) throw new Error("ยอดชำระสะสมเกินยอดบิล กรุณาตรวจสอบยอดคงเหลือ");
 
   await db.transaction(async tx => {
     await tx.insert(monthlyBillPayments).values({
