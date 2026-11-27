@@ -138,6 +138,7 @@ export async function recordMonthlyBillPayment(ownerId: number, input: { id: str
     });
   } catch (error) {
     console.error("[Monthly bill transaction sync] Failed:", error);
+    throw new Error("บันทึกยอดชำระแล้ว แต่ส่งรายการไปชีตธุรกรรมไม่สำเร็จ สามารถกดยืนยันซ้ำเพื่อส่งข้อมูลอีกครั้งได้");
   }
 
   const updated = await db.select().from(monthlyBills)
