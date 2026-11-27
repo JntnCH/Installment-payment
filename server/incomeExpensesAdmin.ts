@@ -32,11 +32,19 @@ export async function incomeExpensesAdminRequest<T = unknown>(
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
+      const responseData = error.response?.data as { error?: string; message?: string } | string | undefined;
+      const responseText = typeof responseData === "string"
+        ? responseData
+        : responseData && Object.keys(responseData).length
+          ? JSON.stringify(responseData)
+          : "";
       const message =
-        (error.response?.data as { error?: string; message?: string } | undefined)?.error ||
-        (error.response?.data as { message?: string } | undefined)?.message ||
+        (typeof responseData === "object" && responseData?.error) ||
+        (typeof responseData === "object" && responseData?.message) ||
+        responseText ||
         error.message;
-      throw new Error(`Income & Expenses API: ${message}`);
+      const status = error.response?.status;
+      throw new Error(`Income & Expenses API${status ? ` HTTP ${status}` : ""}: ${message}`);
     }
     throw error;
   }
@@ -68,11 +76,19 @@ export async function incomeExpensesApiRequest<T = unknown>(
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
+      const responseData = error.response?.data as { error?: string; message?: string } | string | undefined;
+      const responseText = typeof responseData === "string"
+        ? responseData
+        : responseData && Object.keys(responseData).length
+          ? JSON.stringify(responseData)
+          : "";
       const message =
-        (error.response?.data as { error?: string; message?: string } | undefined)?.error ||
-        (error.response?.data as { message?: string } | undefined)?.message ||
+        (typeof responseData === "object" && responseData?.error) ||
+        (typeof responseData === "object" && responseData?.message) ||
+        responseText ||
         error.message;
-      throw new Error(`Income & Expenses API: ${message}`);
+      const status = error.response?.status;
+      throw new Error(`Income & Expenses API${status ? ` HTTP ${status}` : ""}: ${message}`);
     }
     throw error;
   }
