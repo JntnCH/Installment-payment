@@ -26,6 +26,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
   type = "receive",
   onConfirm,
 }) => {
+  const utils = trpc.useUtils();
   const accountsQuery = trpc.sheets.getBalance.useQuery(undefined, { retry: 1 });
   const accounts = accountsQuery.data?.accountBalances ?? [];
   const [account, setAccount] = useState("");
@@ -84,6 +85,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
         receipt = { fileName: receiptFile.name, mimeType: receiptFile.type as "image/jpeg" | "image/png" | "image/webp" | "application/pdf", base64 };
       }
       await onConfirm({ paymentId, amount: numAmount, date, note: note.trim(), account, receipt });
+      await Promise.all([utils.sheets.getBalance.invalidate(), utils.sheets.listTransactions.invalidate()]);
       onClose();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "บันทึกการชำระไม่สำเร็จ");
