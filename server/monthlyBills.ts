@@ -55,7 +55,6 @@ export async function updateMonthlyBill(ownerId: number, id: string, input: Mont
       billName: input.billName.trim(), amount: input.amount.toFixed(2), dueDate: input.dueDate,
       status: existing.status, note: input.note?.trim() || null,
     }).where(and(eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, id)));
-    await enqueue(tx, ownerId, id, "upsert");
   });
   const rows = await db.select().from(monthlyBills).where(and(eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, id))).limit(1);
   return rows[0];
