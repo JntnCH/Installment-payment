@@ -526,9 +526,11 @@ export default function IndividualLedger({
 
   // Pay schedule logic (จ่ายเงินกู้ยืม -> จ่ายออก, รับชำระคืน -> รับเข้า)
   const handleConfirmPaySchedule = async (data: {
+    paymentId: string;
     amount: number;
     date: string;
     note: string;
+    account: string;
     receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string };
   }) => {
     if (!activePaySchedule) return;
@@ -538,9 +540,11 @@ export default function IndividualLedger({
         fileName: data.receipt.fileName, mimeType: data.receipt.mimeType, base64: data.receipt.base64,
       }) : null;
       await markPaidMutation.mutateAsync({
+        paymentId: data.paymentId,
         scheduleId: activePaySchedule.scheduleId,
         paidAmount: data.amount,
         paidAt: new Date(data.date),
+        account: data.account,
         receiptKey: uploaded?.receiptKey,
         source: isDebtor ? "ledger_creditor_collection" : "ledger_debtor_payment",
         note: data.note || (isDebtor ? `รับชำระงวดที่ ${activePaySchedule.installmentNo} (รับเข้า)` : `จ่ายชำระเงินกู้ยืมงวดที่ ${activePaySchedule.installmentNo} (จ่ายออก)`),
@@ -549,7 +553,7 @@ export default function IndividualLedger({
       toast.success(isDebtor ? "บันทึกการรับชำระเงินคืน (รับเข้า) สำเร็จ" : "บันทึกการจ่ายเงินกู้ยืม (จ่ายออก) สำเร็จ");
       setActivePaySchedule(null);
     } catch (err: any) {
-      toast.error(`เกิดข้อผิดพลาด: ${err.message}`);
+      throw new Error(`เกิดข้อผิดพลาด: ${err.message}`);
     }
   };
 
@@ -1032,7 +1036,7 @@ export default function IndividualLedger({
                                         const rawScheduleId = tx.transactionId.replace("schedule:", "");
                                         setActivePaySchedule({
                                           scheduleId: rawScheduleId,
-                                          amount: displayAmount,
+                                          amount: Math.max(0, displayAmount - Number(tx.paidAmount || 0)),
                                           installmentNo: Number(tx.installmentNo || 0),
                                           contractTitle: selectedContract.title,
                                         });

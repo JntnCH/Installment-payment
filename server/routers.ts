@@ -260,7 +260,7 @@ export const appRouter = router({
       base64: z.string().min(1).max(11_184_812),
     })).mutation(({ ctx, input }) => uploadMonthlyBillReceipt(ctx.user.id, input.billId, input.paidDate, input.fileName, input.mimeType, input.base64)),
     recordPayment: protectedProcedure.input(z.object({
-      id: z.string().min(1), paidAmount: z.number().positive(), paidAt: z.string().datetime(), receiptKey: z.string().max(512).optional(),
+      id: z.string().min(1), paymentId: z.string().uuid(), paidAmount: z.number().positive(), paidAt: z.string().datetime(), account: z.string().trim().min(1).max(160), receiptKey: z.string().max(512).optional(),
     })).mutation(({ ctx, input }) => recordMonthlyBillPayment(ctx.user.id, input)),
     delete: protectedProcedure.input(z.object({ id: z.string().min(1) })).mutation(({ ctx, input }) => deleteMonthlyBill(ctx.user.id, input.id)),
   }),

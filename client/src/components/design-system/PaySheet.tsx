@@ -3,6 +3,7 @@ import { X, CheckCircle2 } from "lucide-react";
 import { Money } from "./Money";
 import { Button } from "./Button";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 export interface PaySheetProps {
   open: boolean;
@@ -12,7 +13,7 @@ export interface PaySheetProps {
   defaultAmount: number;
   totalDue?: number;
   type?: "pay" | "receive";
-  onConfirm: (data: { amount: number; date: string; note: string; receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string } }) => Promise<void>;
+  onConfirm: (data: { paymentId: string; amount: number; date: string; note: string; account: string; receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string } }) => Promise<void>;
 }
 
 export const PaySheet: React.FC<PaySheetProps> = ({
@@ -25,6 +26,11 @@ export const PaySheet: React.FC<PaySheetProps> = ({
   type = "receive",
   onConfirm,
 }) => {
+  const utils = trpc.useUtils();
+  const accountsQuery = trpc.sheets.getBalance.useQuery(undefined, { retry: 1 });
+  const accounts = accountsQuery.data?.accountBalances ?? [];
+  const [account, setAccount] = useState("");
+  const [paymentId, setPaymentId] = useState("");
   const [amount, setAmount] = useState<string>(String(defaultAmount || 0));
   const [paymentMode, setPaymentMode] = useState<"full" | "partial">("full");
   const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -35,6 +41,8 @@ export const PaySheet: React.FC<PaySheetProps> = ({
   useEffect(() => {
     if (open) {
       setAmount(String(defaultAmount || 0));
+      setAccount("");
+      setPaymentId(crypto.randomUUID());
       setPaymentMode("full");
       setDate(new Date().toISOString().slice(0, 10));
       setNote("");
@@ -49,11 +57,15 @@ export const PaySheet: React.FC<PaySheetProps> = ({
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) return;
     const dueAmount = Number(totalDue ?? defaultAmount);
-    if (type === "pay" && Math.round(numAmount * 100) > Math.round(dueAmount * 100)) {
-      toast.error("ยอดชำระต้องไม่เกินยอดค่างวดคงเหลือ");
+    if (!account || !accounts.some(item => item.name === account)) {
+      toast.error("กรุณาเลือกบัญชีจากรายการบัญชีที่เชื่อมต่อ");
       return;
     }
-    if (type === "pay" && paymentMode === "full" && Math.round(numAmount * 100) !== Math.round(dueAmount * 100)) {
+    if (Math.round(numAmount * 100) > Math.round(dueAmount * 100)) {
+      toast.error(type === "receive" ? "ยอดรับชำระต้องไม่เกินยอดคงเหลือ" : "ยอดชำระต้องไม่เกินยอดคงเหลือ");
+      return;
+    }
+    if (paymentMode === "full" && Math.round(numAmount * 100) !== Math.round(dueAmount * 100)) {
       setAmount(String(dueAmount));
       return;
     }
@@ -72,8 +84,11 @@ export const PaySheet: React.FC<PaySheetProps> = ({
         });
         receipt = { fileName: receiptFile.name, mimeType: receiptFile.type as "image/jpeg" | "image/png" | "image/webp" | "application/pdf", base64 };
       }
-      await onConfirm({ amount: numAmount, date, note: note.trim(), receipt });
+      await onConfirm({ paymentId, amount: numAmount, date, note: note.trim(), account, receipt });
+      await Promise.all([utils.sheets.getBalance.invalidate(), utils.sheets.listTransactions.invalidate()]);
       onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "บันทึกการชำระไม่สำเร็จ");
     } finally {
       setLoading(false);
     }
@@ -114,22 +129,30 @@ export const PaySheet: React.FC<PaySheetProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="min-w-0 space-y-4">
-          {type === "pay" && (
+          {(
             <div className="space-y-2">
-              <label className="block text-xs font-medium text-[#1C1917]">รูปแบบการชำระค่างวด *</label>
+              <label className="block text-xs font-medium text-[#1C1917]">{type === "receive" ? "รูปแบบการรับชำระ *" : "รูปแบบการชำระค่างวด *"}</label>
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => { setPaymentMode("full"); setAmount(String(totalDue ?? defaultAmount)); }} className={`min-w-0 rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${paymentMode === "full" ? "border-[#A33B2B] bg-[#A33B2B]/10 text-[#A33B2B]" : "border-[#1C1917]/15 bg-white text-[#1C1917]"}`}>
-                  จ่ายเต็มจำนวน
+                  {type === "receive" ? "รับเต็มจำนวน" : "จ่ายเต็มจำนวน"}
                   <span className="mt-1 block text-xs font-normal">฿{Number(totalDue ?? defaultAmount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
                 </button>
                 <button type="button" onClick={() => { setPaymentMode("partial"); setAmount(""); }} className={`min-w-0 rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${paymentMode === "partial" ? "border-[#A33B2B] bg-[#A33B2B]/10 text-[#A33B2B]" : "border-[#1C1917]/15 bg-white text-[#1C1917]"}`}>
-                  จ่ายบางส่วน
-                  <span className="mt-1 block text-xs font-normal">ระบุยอดที่จ่ายจริง</span>
+                  {type === "receive" ? "รับบางส่วน" : "จ่ายบางส่วน"}
+                  <span className="mt-1 block text-xs font-normal">{type === "receive" ? "ระบุยอดที่รับจริง" : "ระบุยอดที่จ่ายจริง"}</span>
                 </button>
               </div>
-              <p className="text-[11px] text-[#78716C]">ยอดค่างวดคงเหลือ ฿{Number(totalDue ?? defaultAmount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
+              <p className="text-[11px] text-[#78716C]">ยอดคงเหลือ ฿{Number(totalDue ?? defaultAmount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
             </div>
           )}
+          <div className="w-full min-w-0">
+            <label className="block text-xs font-medium text-[#1C1917] mb-1.5">บัญชีที่{type === "receive" ? "รับเงินเข้า" : "ใช้จ่ายออก"} *</label>
+            <select value={account} onChange={e => setAccount(e.target.value)} required disabled={accountsQuery.isLoading || accounts.length === 0} className="block w-full h-11 px-3.5 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917]">
+              <option value="">{accountsQuery.isLoading ? "กำลังโหลดบัญชี..." : "-- เลือกบัญชี --"}</option>
+              {accounts.map(item => <option key={item.name} value={item.name}>{item.name} · ฿{Number(item.amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</option>)}
+            </select>
+            {!accountsQuery.isLoading && accounts.length === 0 && <p className="mt-1 text-[11px] text-rose-600">ไม่พบบัญชีจาก Google Sheets กรุณาตรวจสอบการเชื่อมต่อบัญชีก่อนทำรายการ</p>}
+          </div>
           <div className="w-full min-w-0">
             <label className="block text-xs font-medium text-[#1C1917] mb-1.5">
               จำนวนเงินที่บันทึก (บาท) *
@@ -141,8 +164,8 @@ export const PaySheet: React.FC<PaySheetProps> = ({
               required
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              max={type === "pay" ? (totalDue ?? defaultAmount) : undefined}
-              disabled={type === "pay" && paymentMode === "full"}
+              max={totalDue ?? defaultAmount}
+              disabled={paymentMode === "full"}
               className="block box-border min-w-0 w-full max-w-full h-11 px-3.5 bg-white border border-[#1C1917]/15 rounded-[10px] text-base font-mono font-semibold tabular-nums text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:ring-1 focus:ring-[#1C1917]"
             />
           </div>

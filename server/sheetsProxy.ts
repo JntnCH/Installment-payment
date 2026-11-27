@@ -108,6 +108,11 @@ export async function createSheetsTransaction(_userId: number, input: {
   mimeType?: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
   base64?: string;
 }): Promise<Record<string, unknown>> {
+  const account = input.account?.trim();
+  if (!account) throw new Error("กรุณาเลือกบัญชีจากรายการบัญชีที่เชื่อมต่อ");
+  const balance = await getSheetsBalance(_userId);
+  if (!balance.accountBalances.some(item => item.name === account)) throw new Error("บัญชีที่เลือกไม่อยู่ในรายการบัญชีปัจจุบัน กรุณาเลือกบัญชีใหม่");
+
   let receiptUrl = "";
   if (input.base64) {
     if (!input.fileName || !input.mimeType) throw new Error("ข้อมูลไฟล์หลักฐานไม่ครบ");
@@ -127,7 +132,7 @@ export async function createSheetsTransaction(_userId: number, input: {
       item: input.item?.trim() || "ไม่ระบุรายการ",
       amount: input.amount,
       category: input.category || "ทั่วไป",
-      account: input.account || "เงินสด",
+      account,
       recorderName: input.recorderName || "Web",
       channel: input.channel || "Installment Web",
       note: [input.note, receiptUrl].filter(Boolean).join("\\n"),

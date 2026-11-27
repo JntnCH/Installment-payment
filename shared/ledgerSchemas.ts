@@ -37,6 +37,7 @@ export const contractInputSchema = z.object({
 });
 
 export const transactionInputSchema = z.object({
+  transactionId: z.string().uuid().optional(),
   partyId: z.string().trim().min(1).max(64),
   contractId: z.string().trim().min(1).max(64).optional(),
   scheduleId: z.string().trim().min(1).max(64).optional(),
@@ -46,15 +47,18 @@ export const transactionInputSchema = z.object({
   source: z.string().trim().max(64).optional().default("manual"),
   note: z.string().trim().max(2_000).optional().default(""),
   receiptKey: z.string().max(512).optional(),
+  account: z.string().trim().min(1).max(160).optional(),
 });
 
 export const schedulePaymentInputSchema = z.object({
+  paymentId: z.string().uuid(),
   scheduleId: z.string().trim().min(1).max(64),
   paidAmount: z.number().finite().positive(),
   paidAt: z.coerce.date().optional(),
   source: z.string().trim().max(64).optional().default("manual"),
   note: z.string().trim().max(2_000).optional().default(""),
   receiptKey: z.string().max(512).optional(),
+  account: z.string().trim().min(1).max(160),
 });
 
 export const ledgerIdInputSchema = z.object({

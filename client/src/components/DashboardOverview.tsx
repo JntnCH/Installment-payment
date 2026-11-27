@@ -119,9 +119,11 @@ export default function DashboardOverview({
   }, [sheetsTransactionsQuery.data?.data]);
 
   const handleConfirmPay = async (data: {
+    paymentId: string;
     amount: number;
     date: string;
     note: string;
+    account: string;
     receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string };
   }) => {
     if (!activePayItem) return;
@@ -131,9 +133,11 @@ export default function DashboardOverview({
         fileName: data.receipt.fileName, mimeType: data.receipt.mimeType, base64: data.receipt.base64,
       }) : null;
       await markPaidMutation.mutateAsync({
+        paymentId: data.paymentId,
         scheduleId: activePayItem.scheduleId,
         paidAmount: data.amount,
         paidAt: new Date(data.date),
+        account: data.account,
         receiptKey: uploaded?.receiptKey,
         source: "command_center",
         note: data.note || `รับชำระจากหน้าแรก: ${activePayItem.title}`,
@@ -141,7 +145,7 @@ export default function DashboardOverview({
       void utils.ledger.getStats.invalidate();
       toast.success("บันทึกการรับชำระเงินเรียบร้อยแล้ว");
     } catch (err: any) {
-      toast.error(`เกิดข้อผิดพลาด: ${err.message}`);
+      throw new Error(`เกิดข้อผิดพลาด: ${err.message}`);
     }
   };
 
