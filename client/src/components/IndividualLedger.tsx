@@ -526,6 +526,7 @@ export default function IndividualLedger({
 
   // Pay schedule logic (จ่ายเงินกู้ยืม -> จ่ายออก, รับชำระคืน -> รับเข้า)
   const handleConfirmPaySchedule = async (data: {
+    paymentId: string;
     amount: number;
     date: string;
     note: string;
@@ -539,6 +540,7 @@ export default function IndividualLedger({
         fileName: data.receipt.fileName, mimeType: data.receipt.mimeType, base64: data.receipt.base64,
       }) : null;
       await markPaidMutation.mutateAsync({
+        paymentId: data.paymentId,
         scheduleId: activePaySchedule.scheduleId,
         paidAmount: data.amount,
         paidAt: new Date(data.date),
