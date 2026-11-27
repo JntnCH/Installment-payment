@@ -3,6 +3,7 @@ import { monthlyBillPayments, monthlyBills } from "../drizzle/schema";
 import { getDb } from "./db";
 import { uploadReceiptToGoogleDrive } from "./googleDrive";
 import { incomeExpensesApiRequest } from "./incomeExpensesAdmin";
+import { getSheetsBalance } from "./sheetsProxy";
 
 export type MonthlyBillInput = {
   billName: string;
@@ -99,6 +100,10 @@ export async function recordMonthlyBillPayment(ownerId: number, input: { id: str
   }
   const previousPayments = await db.select().from(monthlyBillPayments).where(and(eq(monthlyBillPayments.ownerId, ownerId), eq(monthlyBillPayments.billId, bill.id), eq(monthlyBillPayments.monthKey, monthKey)));
   const alreadyRecorded = previousPayments.find(payment => payment.id === input.paymentId);
+  if (!alreadyRecorded) {
+    const availableAccounts = await getSheetsBalance(ownerId);
+    if (!availableAccounts.accountBalances.some(account => account.name === input.account)) throw new Error("บัญชีที่เลือกไม่อยู่ในรายการบัญชีปัจจุบัน กรุณาเลือกบัญชีใหม่");
+  }
   const paidBeforeCents = previousPayments.reduce((sum, payment) => sum + Math.round(Number(payment.paidAmount) * 100), 0) - (alreadyRecorded ? Math.round(Number(alreadyRecorded.paidAmount) * 100) : 0);
   const paidTotalCents = paidBeforeCents + Math.round(input.paidAmount * 100);
   const billAmountCents = Math.round(Number(bill.amount) * 100);
