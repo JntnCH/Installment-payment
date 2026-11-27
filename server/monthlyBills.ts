@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
-import { monthlyBillPayments, monthlyBillSyncOutbox, monthlyBills } from "../drizzle/schema";
+import { monthlyBillPayments, monthlyBills } from "../drizzle/schema";
 import { getDb } from "./db";
 import { uploadReceiptToGoogleDrive } from "./googleDrive";
 import { incomeExpensesApiRequest } from "./incomeExpensesAdmin";
@@ -11,18 +11,6 @@ export type MonthlyBillInput = {
   status?: "pending" | "paid";
   note?: string;
 };
-
-async function enqueue(tx: any, ownerId: number, billId: string, action: "upsert" | "delete") {
-  await tx.insert(monthlyBillSyncOutbox).values({
-    id: crypto.randomUUID(),
-    ownerId,
-    billId,
-    action,
-    status: "pending",
-    attempts: 0,
-    nextRetryAt: new Date(),
-  });
-}
 
 export async function listMonthlyBills(ownerId: number) {
   const db = await getDb();
@@ -49,7 +37,6 @@ export async function createMonthlyBill(ownerId: number, input: MonthlyBillInput
       id, ownerId, billName: input.billName.trim(), amount: input.amount.toFixed(2),
       dueDate: input.dueDate, status: input.status ?? "pending", note: input.note?.trim() || null,
     });
-    await enqueue(tx, ownerId, id, "upsert");
   });
   const rows = await db.select().from(monthlyBills).where(and(eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, id))).limit(1);
   return rows[0];
@@ -167,7 +154,6 @@ export async function deleteMonthlyBill(ownerId: number, id: string) {
     if (!rows[0]) throw new Error("ไม่พบบิลรายเดือน");
     await tx.update(monthlyBills).set({ deletedAt: new Date() })
       .where(and(eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, id)));
-    await enqueue(tx, ownerId, id, "delete");
   });
   return { success: true };
 }
