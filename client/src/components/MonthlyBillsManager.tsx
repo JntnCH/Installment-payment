@@ -54,6 +54,7 @@ export default function MonthlyBillsManager() {
     event.preventDefault();
     const outstanding = paymentBill ? getCurrentMonthOutstanding(paymentBill) : 0;
     if (!paymentBill || !paymentAccount || !accounts.some(item => item.name === paymentAccount) || !(Number(paidAmount) > 0) || Number(paidAmount) > outstanding) { toast.error("เลือกบัญชีและกรอกยอดชำระจริงไม่เกินยอดคงเหลือ"); return; }
+    if (paymentMode === "full" && Math.round(Number(paidAmount) * 100) !== Math.round(outstanding * 100)) { setPaidAmount(outstanding.toFixed(2)); return; }
     try {
       let receiptKey: string | undefined;
       if (receiptFile) {
