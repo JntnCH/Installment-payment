@@ -46,10 +46,11 @@ export default function MonthlyBillsManager() {
   const payments: BillPayment[] = paymentsQuery.data ?? [];
   const currentMonth = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit" }).format(new Date());
   const getCurrentMonthPayments = (billId: string) => payments.filter(payment => payment.billId === billId && payment.monthKey === currentMonth);
-  const getCurrentMonthPaid = (billId: string) => getCurrentMonthPayments(billId).reduce((sum, payment) => sum + Number(payment.paidAmount), 0);
-  const getCurrentMonthOutstanding = (bill: Bill) => Math.max(0, Number(bill.amount) - getCurrentMonthPaid(bill.id));
+  const getCurrentMonthPaidCents = (billId: string) => getCurrentMonthPayments(billId).reduce((sum, payment) => sum + Math.round(Number(payment.paidAmount) * 100), 0);
+  const getCurrentMonthPaid = (billId: string) => getCurrentMonthPaidCents(billId) / 100;
+  const getCurrentMonthOutstanding = (bill: Bill) => Math.max(0, Math.round(Number(bill.amount) * 100) - getCurrentMonthPaidCents(bill.id)) / 100;
   const getCurrentMonthPayment = (billId: string) => getCurrentMonthPayments(billId)[0];
-  const totalPending = useMemo(() => bills.reduce((sum, bill) => sum + Math.max(0, Number(bill.amount) - payments.filter(payment => payment.billId === bill.id && payment.monthKey === currentMonth).reduce((paid, payment) => paid + Number(payment.paidAmount), 0)), 0), [bills, payments, currentMonth]);
+  const totalPending = useMemo(() => bills.reduce((sum, bill) => sum + Math.max(0, Math.round(Number(bill.amount) * 100) - payments.filter(payment => payment.billId === bill.id && payment.monthKey === currentMonth).reduce((paid, payment) => paid + Math.round(Number(payment.paidAmount) * 100), 0)) / 100, 0), [bills, payments, currentMonth]);
   const submitPayment = async (event: React.FormEvent) => {
     event.preventDefault();
     const outstanding = paymentBill ? getCurrentMonthOutstanding(paymentBill) : 0;
