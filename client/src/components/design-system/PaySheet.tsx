@@ -128,15 +128,15 @@ export const PaySheet: React.FC<PaySheetProps> = ({
               <label className="block text-xs font-medium text-[#1C1917]">รูปแบบการชำระค่างวด *</label>
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => { setPaymentMode("full"); setAmount(String(totalDue ?? defaultAmount)); }} className={`min-w-0 rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${paymentMode === "full" ? "border-[#A33B2B] bg-[#A33B2B]/10 text-[#A33B2B]" : "border-[#1C1917]/15 bg-white text-[#1C1917]"}`}>
-                  จ่ายเต็มจำนวน
+                  {type === "receive" ? "รับเต็มจำนวน" : "จ่ายเต็มจำนวน"}
                   <span className="mt-1 block text-xs font-normal">฿{Number(totalDue ?? defaultAmount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
                 </button>
                 <button type="button" onClick={() => { setPaymentMode("partial"); setAmount(""); }} className={`min-w-0 rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${paymentMode === "partial" ? "border-[#A33B2B] bg-[#A33B2B]/10 text-[#A33B2B]" : "border-[#1C1917]/15 bg-white text-[#1C1917]"}`}>
-                  จ่ายบางส่วน
+                  {type === "receive" ? "รับบางส่วน" : "จ่ายบางส่วน"}
                   <span className="mt-1 block text-xs font-normal">ระบุยอดที่จ่ายจริง</span>
                 </button>
               </div>
-              <p className="text-[11px] text-[#78716C]">ยอดค่างวดคงเหลือ ฿{Number(totalDue ?? defaultAmount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
+              <p className="text-[11px] text-[#78716C]">ยอดคงเหลือ ฿{Number(totalDue ?? defaultAmount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
             </div>
           )}
           <div className="w-full min-w-0">
