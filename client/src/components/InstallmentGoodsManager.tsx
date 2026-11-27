@@ -239,7 +239,7 @@ export default function InstallmentGoodsManager() {
   };
 
   // Pay Schedule for Goods Installment (ลูกหนี้จ่ายค่างวดสินค้า -> จ่ายออก)
-  const handleConfirmPay = async (data: { amount: number; date: string; note: string; receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string } }) => {
+  const handleConfirmPay = async (data: { amount: number; date: string; note: string; account: string; receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string } }) => {
     if (!activePaySchedule) return;
     try {
       const uploaded = data.receipt ? await uploadReceiptMutation.mutateAsync({
@@ -250,6 +250,7 @@ export default function InstallmentGoodsManager() {
         scheduleId: activePaySchedule.scheduleId,
         paidAmount: data.amount,
         paidAt: new Date(data.date),
+        account: data.account,
         receiptKey: uploaded?.receiptKey,
         source: "ledger_debtor_payment",
         note: data.note || `จ่ายค่างวดผ่อนสินค้า ${activePaySchedule.contractTitle} งวดที่ ${activePaySchedule.installmentNo} (จ่ายออก)`,
