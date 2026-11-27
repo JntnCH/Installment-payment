@@ -529,6 +529,7 @@ export default function IndividualLedger({
     amount: number;
     date: string;
     note: string;
+    account: string;
     receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string };
   }) => {
     if (!activePaySchedule) return;
@@ -541,6 +542,7 @@ export default function IndividualLedger({
         scheduleId: activePaySchedule.scheduleId,
         paidAmount: data.amount,
         paidAt: new Date(data.date),
+        account: data.account,
         receiptKey: uploaded?.receiptKey,
         source: isDebtor ? "ledger_creditor_collection" : "ledger_debtor_payment",
         note: data.note || (isDebtor ? `รับชำระงวดที่ ${activePaySchedule.installmentNo} (รับเข้า)` : `จ่ายชำระเงินกู้ยืมงวดที่ ${activePaySchedule.installmentNo} (จ่ายออก)`),
