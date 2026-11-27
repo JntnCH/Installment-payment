@@ -98,6 +98,7 @@ export const ledgerTransactions = mysqlTable("ledger_transactions", {
   source: varchar("source", { length: 64 }).notNull().default("manual"),
   note: text("note"),
   receiptKey: varchar("receiptKey", { length: 512 }),
+  accountName: varchar("accountName", { length: 160 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => ({
   ownerOccurredIdx: index("ledger_transaction_owner_occurred_idx").on(table.ownerId, table.occurredAt),
@@ -149,10 +150,12 @@ export const monthlyBillPayments = mysqlTable("monthly_bill_payments", {
   paidAt: timestamp("paidAt").notNull(),
   receiptKey: varchar("receiptKey", { length: 512 }),
   transactionId: varchar("transactionId", { length: 128 }).notNull(),
+  accountName: varchar("accountName", { length: 160 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, table => ({
-  ownerBillMonthUnique: uniqueIndex("monthly_bill_payment_owner_bill_month_uq").on(table.ownerId, table.billId, table.monthKey),
+  transactionUnique: uniqueIndex("monthly_bill_payment_transaction_uq").on(table.transactionId),
+  ownerBillMonthIdx: index("monthly_bill_payment_owner_bill_month_idx").on(table.ownerId, table.billId, table.monthKey),
   ownerPaidAtIdx: index("monthly_bill_payment_owner_paid_at_idx").on(table.ownerId, table.paidAt),
   billMonthIdx: index("monthly_bill_payment_bill_month_idx").on(table.billId, table.monthKey),
 }));
