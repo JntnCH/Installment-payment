@@ -356,17 +356,15 @@ export async function processMonthlyBillSyncQueue() {
 export async function startMonthlyBillSyncWorker() {
   const db = await getDb();
   if (!db) {
-    console.warn("[Monthly bill sync] Database unavailable; worker not started");
+    console.warn("[Google Sheets sync] Database unavailable; worker not started");
     return;
   }
-  await db.update(monthlyBillSyncOutbox).set({ status: "pending" })
-    .where(eq(monthlyBillSyncOutbox.status, "processing"));
+  // Monthly bills are recorded in the existing transaction ledger. Do not create
+  // or maintain a separate "บิลรายเดือน" Google Sheets tab.
   await db.update(financialAssetSyncOutbox).set({ status: "pending" })
     .where(eq(financialAssetSyncOutbox.status, "processing"));
-  void processMonthlyBillSyncQueue();
   void processFinancialAssetSyncQueue();
   const timer = setInterval(() => {
-    void processMonthlyBillSyncQueue();
     void processFinancialAssetSyncQueue();
   }, 30_000);
   timer.unref?.();
