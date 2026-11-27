@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 type Bill = { id: string; billName: string; amount: string | number; dueDate: string; status: "pending" | "paid"; note: string | null; paidAt?: Date | string | null; paidAmount?: string | number | null; receiptKey?: string | null };
-type BillPayment = { id: number; billId: string; monthKey: string; paidAmount: string | number; paidAt: Date | string; receiptKey?: string | null };
+type BillPayment = { id: string; billId: string; monthKey: string; paidAmount: string | number; paidAt: Date | string; receiptKey?: string | null };
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function MonthlyBillsManager() {
