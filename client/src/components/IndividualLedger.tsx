@@ -430,7 +430,7 @@ export default function IndividualLedger({
         setSelectedPartyId(res.partyId);
       }
     } catch (err: any) {
-      toast.error(`เกิดข้อผิดพลาด: ${err.message}`);
+      throw new Error(`เกิดข้อผิดพลาด: ${err.message}`);
     }
   };
 
