@@ -741,6 +741,7 @@ export async function createLedgerTransaction(ownerId: number, input: Transactio
     source: input.source,
     note: input.note || null,
     receiptKey: input.receiptKey ?? null,
+    accountName: input.account ?? null,
     createdAt: new Date(),
   };
   memoryTransactions.set(id, row);
@@ -983,6 +984,7 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
         source: input.source,
         note: input.note || `ชำระงวดที่ ${schedule.installmentNo}`,
         receiptKey: input.receiptKey ?? null,
+        accountName: input.account,
       });
     });
 
@@ -1036,7 +1038,7 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
     const isSelected = item.row.id === s.id;
     memorySchedules.set(item.row.id, {...item.row, amount: (revisedAmountCents / 100).toFixed(2), ...(isSelected ? {status: newPaidCents >= newAmountCents ? "paid" : "pending", paidAmount: (newPaidCents / 100).toFixed(2), paidAt: newPaidCents >= newAmountCents ? paidAt : null} : {}), updatedAt: new Date()});
   }
-  await createLedgerTransaction(ownerId, {partyId: s.partyId, contractId: s.contractId, scheduleId: s.id, type: "payment", amount: input.paidAmount, occurredAt: paidAt, source: input.source, note: input.note || `ชำระงวดที่ ${s.installmentNo}`, receiptKey: input.receiptKey});
+  await createLedgerTransaction(ownerId, {partyId: s.partyId, contractId: s.contractId, scheduleId: s.id, type: "payment", amount: input.paidAmount, occurredAt: paidAt, source: input.source, note: input.note || `ชำระงวดที่ ${s.installmentNo}`, receiptKey: input.receiptKey, account: input.account});
   const updated = memorySchedules.get(s.id);
   return updated ? toScheduleTransaction(updated) : null;
 }
