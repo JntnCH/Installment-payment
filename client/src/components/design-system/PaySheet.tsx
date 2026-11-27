@@ -61,7 +61,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
       return;
     }
     if (Math.round(numAmount * 100) > Math.round(dueAmount * 100)) {
-      toast.error("ยอดชำระต้องไม่เกินยอดค่างวดคงเหลือ");
+      toast.error(type === "receive" ? "ยอดรับชำระต้องไม่เกินยอดคงเหลือ" : "ยอดชำระต้องไม่เกินยอดคงเหลือ");
       return;
     }
     if (paymentMode === "full" && Math.round(numAmount * 100) !== Math.round(dueAmount * 100)) {
@@ -127,7 +127,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
         <form onSubmit={handleSubmit} className="min-w-0 space-y-4">
           {(
             <div className="space-y-2">
-              <label className="block text-xs font-medium text-[#1C1917]">รูปแบบการชำระค่างวด *</label>
+              <label className="block text-xs font-medium text-[#1C1917]">{type === "receive" ? "รูปแบบการรับชำระ *" : "รูปแบบการชำระค่างวด *"}</label>
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => { setPaymentMode("full"); setAmount(String(totalDue ?? defaultAmount)); }} className={`min-w-0 rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${paymentMode === "full" ? "border-[#A33B2B] bg-[#A33B2B]/10 text-[#A33B2B]" : "border-[#1C1917]/15 bg-white text-[#1C1917]"}`}>
                   {type === "receive" ? "รับเต็มจำนวน" : "จ่ายเต็มจำนวน"}
