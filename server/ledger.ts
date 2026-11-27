@@ -18,6 +18,7 @@ import type {
 } from "../shared/ledgerSchemas";
 import { getDb } from "./db";
 import { uploadReceiptToGoogleDrive } from "./googleDrive";
+import { incomeExpensesApiRequest } from "./incomeExpensesAdmin";
 
 const asAmount = (value: string | number | null | undefined) => Number(value ?? 0);
 const asDate = (value: Date | string | null | undefined) => {
@@ -704,7 +705,7 @@ export async function createLedgerTransaction(ownerId: number, input: Transactio
     if (!contract || contract.partyId !== input.partyId) throw new Error("สัญญาไม่สัมพันธ์กับคู่สัญญาที่เลือก");
   }
 
-  const id = crypto.randomUUID();
+  const id = input.transactionId ?? crypto.randomUUID();
   const occurredAt = input.occurredAt ?? new Date();
   const db = await getDb();
 
@@ -870,8 +871,35 @@ export async function uploadLedgerReceipt(
 export async function markSchedulePaid(ownerId: number, input: SchedulePaymentInput) {
   const db = await getDb();
   const paidAt = input.paidAt ?? new Date();
+  const syncPayment = async () => {
+    const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(paidAt);
+    const isIncoming = input.source === "ledger_creditor_collection";
+    const isGoods = input.source === "ledger_debtor_payment";
+    await incomeExpensesApiRequest("POST", "/api/transactions", {
+      transactionId: input.paymentId,
+      type: isIncoming ? "income" : "expense",
+      item: input.note || (isIncoming ? "รับชำระหนี้" : isGoods ? "ชำระค่างวดผ่อนสินค้า" : "ชำระหนี้สิน"),
+      amount: input.paidAmount,
+      category: isIncoming ? "รับชำระหนี้" : isGoods ? "ผ่อนสินค้า" : "ชำระหนี้สิน",
+      account: input.account,
+      recorderName: "Installment Web",
+      channel: "Installment Web",
+      date,
+      receiptUrl: input.receiptKey ? `https://drive.google.com/open?id=${encodeURIComponent(input.receiptKey)}` : "",
+      note: input.note || "บันทึกการชำระจากระบบ Installment Web",
+    });
+  };
 
   if (db) {
+    const [previousPayment] = await db.select().from(ledgerTransactions)
+      .where(and(eq(ledgerTransactions.ownerId, ownerId), eq(ledgerTransactions.id, input.paymentId))).limit(1);
+    if (previousPayment) {
+      if (previousPayment.scheduleId !== input.scheduleId) throw new Error("รหัสรายการชำระนี้ถูกใช้กับงวดอื่นแล้ว");
+      await syncPayment();
+      const [currentSchedule] = await db.select().from(contractPaymentSchedules)
+        .where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.id, input.scheduleId))).limit(1);
+      return currentSchedule ? toScheduleTransaction(currentSchedule) : null;
+    }
     const [schedule] = await db
       .select()
       .from(contractPaymentSchedules)
@@ -973,7 +1001,7 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
         .where(eq(contractPaymentSchedules.id, schedule.id));
 
       await tx.insert(ledgerTransactions).values({
-        id: crypto.randomUUID(),
+        id: input.paymentId,
         ownerId,
         partyId: schedule.partyId,
         contractId: schedule.contractId,
@@ -987,6 +1015,11 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
         accountName: input.account,
       });
     });
+
+    try { await syncPayment(); } catch (error) {
+      console.error("[Schedule payment sync] Failed:", error);
+      throw new Error("บันทึกยอดชำระแล้ว แต่ส่งรายการไป Google Sheets ไม่สำเร็จ กรุณากดยืนยันซ้ำเพื่อซิงก์รายการเดิม");
+    }
 
     const [updated] = await db
       .select()
@@ -1038,7 +1071,8 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
     const isSelected = item.row.id === s.id;
     memorySchedules.set(item.row.id, {...item.row, amount: (revisedAmountCents / 100).toFixed(2), ...(isSelected ? {status: newPaidCents >= newAmountCents ? "paid" : "pending", paidAmount: (newPaidCents / 100).toFixed(2), paidAt: newPaidCents >= newAmountCents ? paidAt : null} : {}), updatedAt: new Date()});
   }
-  await createLedgerTransaction(ownerId, {partyId: s.partyId, contractId: s.contractId, scheduleId: s.id, type: "payment", amount: input.paidAmount, occurredAt: paidAt, source: input.source, note: input.note || `ชำระงวดที่ ${s.installmentNo}`, receiptKey: input.receiptKey, account: input.account});
+  await createLedgerTransaction(ownerId, {transactionId: input.paymentId, partyId: s.partyId, contractId: s.contractId, scheduleId: s.id, type: "payment", amount: input.paidAmount, occurredAt: paidAt, source: input.source, note: input.note || `ชำระงวดที่ ${s.installmentNo}`, receiptKey: input.receiptKey, account: input.account});
+  await syncPayment();
   const updated = memorySchedules.get(s.id);
   return updated ? toScheduleTransaction(updated) : null;
 }
