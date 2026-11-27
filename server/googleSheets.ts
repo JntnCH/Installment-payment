@@ -1,13 +1,11 @@
 import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
 import axios from "axios";
 import { and, asc, eq, lte } from "drizzle-orm";
-import { financialAssetSyncOutbox, financialAssets, googleSheetsConnections, monthlyBillSyncOutbox, monthlyBills } from "../drizzle/schema";
+import { financialAssetSyncOutbox, financialAssets, googleSheetsConnections } from "../drizzle/schema";
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
 
 const GOOGLE_API = "https://sheets.googleapis.com/v4";
-const TAB_NAME = "บิลรายเดือน";
-const HEADERS = ["Bill ID", "ชื่อบิล", "จำนวนเงิน", "วันครบกำหนด", "สถานะ", "หมายเหตุ", "แก้ไขล่าสุด", "วันที่ชำระ", "ยอดที่ชำระจริง", "หลักฐานการชำระ", "ส่วนต่าง (จ่ายจริง - ยอดบิล)"];
 
 function encryptionKey(): Buffer {
   const value = ENV.googleTokenEncryptionKey;
@@ -142,75 +140,6 @@ async function googleRequest<T>(token: string, method: "GET" | "POST" | "PUT", u
   return response.data;
 }
 
-async function ensureBillTab(token: string, spreadsheetId: string) {
-  const meta = await googleRequest<{ sheets?: Array<{ properties?: { title?: string } }> }>(
-    token, "GET", `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`,
-  );
-  const exists = (meta.sheets ?? []).some(sheet => sheet.properties?.title === TAB_NAME);
-  if (!exists) {
-    await googleRequest(token, "POST", `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}:batchUpdate`, {
-      requests: [{ addSheet: { properties: { title: TAB_NAME } } }],
-    });
-  }
-  const headerRange = encodeURIComponent(`'${TAB_NAME}'!A1:K1`);
-  const header = await googleRequest<{ values?: unknown[][] }>(
-    token, "GET", `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${headerRange}`,
-  );
-  if (!header.values?.length || (header.values[0]?.length ?? 0) < HEADERS.length) {
-    await googleRequest(token, "PUT",
-      `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${headerRange}?valueInputOption=RAW`,
-      { values: [HEADERS] },
-    );
-  }
-}
-
-async function syncBill(token: string, spreadsheetId: string, billId: string, action: "upsert" | "delete", userId: number) {
-  await ensureBillTab(token, spreadsheetId);
-  const db = await getDb();
-  if (!db) throw new Error("Database is not available");
-  const rows = await db.select().from(monthlyBills).where(and(
-    eq(monthlyBills.ownerId, userId), eq(monthlyBills.id, billId),
-  )).limit(1);
-  const bill = rows[0];
-  const idRange = encodeURIComponent(`'${TAB_NAME}'!A2:A`);
-  const existing = await googleRequest<{ values?: string[][] }>(
-    token, "GET", `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${idRange}`,
-  );
-  const index = (existing.values ?? []).findIndex(row => row[0] === billId);
-  if (action === "delete" || !bill || bill.deletedAt) {
-    if (index >= 0) {
-      const rowNumber = index + 2;
-      const range = encodeURIComponent(`'${TAB_NAME}'!A${rowNumber}:K${rowNumber}`);
-      await googleRequest(token, "POST",
-        `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}:clear`, {},
-      );
-    }
-    return;
-  }
-  const values = [[
-    bill.id, bill.billName, Number(bill.amount), bill.dueDate,
-    bill.status === "paid" ? "ชำระแล้ว" : "รอชำระ", bill.note ?? "",
-    bill.updatedAt.toISOString(), bill.paidAt?.toISOString() ?? "",
-    bill.paidAmount ? Number(bill.paidAmount) : "",
-    bill.receiptKey ? "https://drive.google.com/open?id=" + encodeURIComponent(bill.receiptKey) : "",
-    bill.status === "paid" && bill.paidAmount != null ? Number((Number(bill.paidAmount) - Number(bill.amount)).toFixed(2)) : "",
-  ]];
-  if (index >= 0) {
-    const rowNumber = index + 2;
-    const range = encodeURIComponent(`'${TAB_NAME}'!A${rowNumber}:K${rowNumber}`);
-    await googleRequest(token, "PUT",
-      `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}?valueInputOption=USER_ENTERED`,
-      { values },
-    );
-  } else {
-    const range = encodeURIComponent(`'${TAB_NAME}'!A:K`);
-    await googleRequest(token, "POST",
-      `${GOOGLE_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-      { values },
-    );
-  }
-}
-
 const ASSET_TAB_NAME = "ทรัพย์สิน";
 const ASSET_HEADERS = ["Asset ID", "ประเภท", "ชื่อทรัพย์สิน", "มูลค่าปัจจุบัน", "หมายเหตุ", "แก้ไขล่าสุด"];
 
@@ -311,46 +240,6 @@ async function processFinancialAssetSyncQueue() {
   } finally {
     assetQueueRunning = false;
   }
-}
-
-let running = false;
-export async function processMonthlyBillSyncQueue() {
-  if (running) return;
-  running = true;
-  try {
-    const db = await getDb();
-    if (!db) return;
-    const pending = await db.select().from(monthlyBillSyncOutbox)
-      .where(and(eq(monthlyBillSyncOutbox.status, "pending"), lte(monthlyBillSyncOutbox.nextRetryAt, new Date())))
-      .orderBy(asc(monthlyBillSyncOutbox.createdAt)).limit(20);
-    for (const job of pending) {
-      const claim = await db.update(monthlyBillSyncOutbox).set({ status: "processing" })
-        .where(and(eq(monthlyBillSyncOutbox.id, job.id), eq(monthlyBillSyncOutbox.status, "pending")));
-      const affectedRows = Array.isArray(claim)
-        ? Number((claim[0] as { affectedRows?: number })?.affectedRows)
-        : Number((claim as unknown as { affectedRows?: number })?.affectedRows);
-      if (Number.isFinite(affectedRows) && affectedRows === 0) continue;
-      try {
-        const credentials = await accessToken(job.ownerId);
-        await syncBill(credentials.token, credentials.spreadsheetId, job.billId, job.action, job.ownerId);
-        await db.update(monthlyBillSyncOutbox).set({ status: "done", lastError: null })
-          .where(eq(monthlyBillSyncOutbox.id, job.id));
-      } catch (error) {
-        const attempts = job.attempts + 1;
-        const delayMinutes = Math.min(360, 2 ** Math.min(attempts, 8));
-        await db.update(monthlyBillSyncOutbox).set({
-          status: "pending",
-          attempts,
-          nextRetryAt: new Date(Date.now() + delayMinutes * 60_000),
-          lastError: (error instanceof Error ? error.message : String(error)).slice(0, 2000),
-        }).where(eq(monthlyBillSyncOutbox.id, job.id));
-        console.error("[Monthly bill sync] Retry scheduled:", job.id, error);
-      }
-    }
-  } finally {
-    running = false;
-  }
-  void processFinancialAssetSyncQueue();
 }
 
 export async function startMonthlyBillSyncWorker() {
