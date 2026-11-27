@@ -253,7 +253,7 @@ export default function InstallmentGoodsManager() {
         paidAt: new Date(data.date),
         account: data.account,
         receiptKey: uploaded?.receiptKey,
-        source: "ledger_debtor_payment",
+        source: "installment_goods_payment",
         note: data.note || `จ่ายค่างวดผ่อนสินค้า ${activePaySchedule.contractTitle} งวดที่ ${activePaySchedule.installmentNo} (จ่ายออก)`,
       });
       refreshProductLedger(selectedPartyId, selectedContractId);
