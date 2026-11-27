@@ -122,6 +122,7 @@ export default function DashboardOverview({
     amount: number;
     date: string;
     note: string;
+    account: string;
     receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string };
   }) => {
     if (!activePayItem) return;
@@ -134,6 +135,7 @@ export default function DashboardOverview({
         scheduleId: activePayItem.scheduleId,
         paidAmount: data.amount,
         paidAt: new Date(data.date),
+        account: data.account,
         receiptKey: uploaded?.receiptKey,
         source: "command_center",
         note: data.note || `รับชำระจากหน้าแรก: ${activePayItem.title}`,
