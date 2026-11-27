@@ -16,3 +16,19 @@ CREATE TABLE `monthly_bill_payments` (
   CONSTRAINT `monthly_bill_payments_owner_fk` FOREIGN KEY (`ownerId`) REFERENCES `users`(`id`) ON DELETE CASCADE,
   CONSTRAINT `monthly_bill_payments_bill_fk` FOREIGN KEY (`billId`) REFERENCES `monthly_bills`(`id`) ON DELETE CASCADE
 );
+
+INSERT INTO `monthly_bill_payments`
+  (`id`, `ownerId`, `billId`, `monthKey`, `paidAmount`, `paidAt`, `receiptKey`, `transactionId`, `createdAt`, `updatedAt`)
+SELECT
+  UUID(),
+  `ownerId`,
+  `id`,
+  DATE_FORMAT(`paidAt`, '%Y-%m'),
+  COALESCE(`paidAmount`, `amount`),
+  `paidAt`,
+  `receiptKey`,
+  CONCAT('monthly-bill:', `id`, ':', DATE_FORMAT(`paidAt`, '%Y-%m')),
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+FROM `monthly_bills`
+WHERE `status` = 'paid' AND `paidAt` IS NOT NULL;
