@@ -333,8 +333,8 @@ export default function CashflowManager() {
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-[#FFFCF8] rounded-3xl border border-[#1C1917]/10 p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain p-4 bg-black/40 backdrop-blur-xs">
+          <div className="w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain bg-[#FFFCF8] rounded-3xl border border-[#1C1917]/10 p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-[#1C1917] mb-1">
               บันทึกลง Google Sheets
             </h3>
