@@ -896,6 +896,9 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
       .where(and(eq(ledgerTransactions.ownerId, ownerId), eq(ledgerTransactions.id, input.paymentId))).limit(1);
     if (previousPayment) {
       if (previousPayment.scheduleId !== input.scheduleId) throw new Error("รหัสรายการชำระนี้ถูกใช้กับงวดอื่นแล้ว");
+      if (Math.round(asAmount(previousPayment.amount) * 100) !== Math.round(input.paidAmount * 100) || previousPayment.accountName !== input.account || previousPayment.source !== input.source) {
+        throw new Error("รหัสรายการชำระนี้ถูกใช้ไปแล้วด้วยข้อมูลอื่น กรุณาเริ่มรายการใหม่");
+      }
       await syncPayment();
       const [currentSchedule] = await db.select().from(contractPaymentSchedules)
         .where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.id, input.scheduleId))).limit(1);
