@@ -49,7 +49,7 @@ export default function CashflowManager() {
     type: "รายรับ" as "รายรับ" | "รายจ่าย",
     item: "",
     amount: "",
-    account: "เงินสด",
+    account: "",
     note: "",
   });
 
@@ -100,6 +100,10 @@ export default function CashflowManager() {
       toast.error("กรุณาระบุรายการ");
       return;
     }
+    if (!txForm.account || !(balance?.accountBalances ?? []).some(account => account.name === txForm.account)) {
+      toast.error("กรุณาเลือกบัญชีจากรายการบัญชีที่เชื่อมต่อ");
+      return;
+    }
     if (isNaN(numAmount) || numAmount <= 0) {
       toast.error("กรุณาระบุจำนวนเงินที่ถูกต้อง");
       return;
@@ -123,7 +127,7 @@ export default function CashflowManager() {
         type: txForm.type,
         item: txForm.item.trim(),
         amount: numAmount,
-        account: txForm.account || "เงินสด",
+        account: txForm.account,
         channel: "Installment Web",
         note: txForm.note || "",
         recorderName: "Web",
@@ -139,7 +143,7 @@ export default function CashflowManager() {
         type: "รายรับ",
         item: "",
         amount: "",
-        account: "เงินสด",
+        account: "",
         note: "",
       });
       setReceiptFile(null);
@@ -379,12 +383,7 @@ export default function CashflowManager() {
                 onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })}
                 className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm font-mono"
               />
-              <input
-                placeholder="บัญชี เช่น กสิกรไทย"
-                value={txForm.account}
-                onChange={(e) => setTxForm({ ...txForm, account: e.target.value })}
-                className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm"
-              />
+              <label className="block text-xs text-[#1C1917] space-y-1"><span>บัญชีที่{txForm.type === "รายรับ" ? "รับเงินเข้า" : "ใช้จ่ายออก"} *</span><select required value={txForm.account} onChange={e => setTxForm({ ...txForm, account: e.target.value })} className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm"><option value="">-- เลือกบัญชี --</option>{(balance?.accountBalances ?? []).map(acc => <option key={acc.name} value={acc.name}>{acc.name} · ฿{Number(acc.amount).toLocaleString("th-TH",{minimumFractionDigits:2})}</option>)}</select></label>
               <label className="block text-xs text-[#1C1917] space-y-1">
                 <span>วันที่ทำรายการ</span>
                 <input type="date" required value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} className="w-full h-10 px-3 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm" />
