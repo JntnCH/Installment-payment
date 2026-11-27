@@ -260,7 +260,7 @@ export default function InstallmentGoodsManager() {
       toast.success("บันทึกการจ่ายค่างวดสินค้า (จ่ายออก) เรียบร้อยแล้ว");
       setActivePaySchedule(null);
     } catch (err: any) {
-      toast.error(`เกิดข้อผิดพลาด: ${err.message}`);
+      throw new Error(`เกิดข้อผิดพลาด: ${err.message}`);
     }
   };
 
