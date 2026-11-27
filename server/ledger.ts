@@ -19,6 +19,7 @@ import type {
 import { getDb } from "./db";
 import { uploadReceiptToGoogleDrive } from "./googleDrive";
 import { incomeExpensesApiRequest } from "./incomeExpensesAdmin";
+import { getSheetsBalance } from "./sheetsProxy";
 
 const asAmount = (value: string | number | null | undefined) => Number(value ?? 0);
 const asDate = (value: Date | string | null | undefined) => {
@@ -904,6 +905,8 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
         .where(and(eq(contractPaymentSchedules.ownerId, ownerId), eq(contractPaymentSchedules.id, input.scheduleId))).limit(1);
       return currentSchedule ? toScheduleTransaction(currentSchedule) : null;
     }
+    const availableAccounts = await getSheetsBalance(ownerId);
+    if (!availableAccounts.accountBalances.some(account => account.name === input.account)) throw new Error("บัญชีที่เลือกไม่อยู่ในรายการบัญชีปัจจุบัน กรุณาเลือกบัญชีใหม่");
     const [schedule] = await db
       .select()
       .from(contractPaymentSchedules)
@@ -1032,6 +1035,8 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
       .limit(1);
     return updated ? toScheduleTransaction(updated) : null;
   }
+  const availableAccounts = await getSheetsBalance(ownerId);
+  if (!availableAccounts.accountBalances.some(account => account.name === input.account)) throw new Error("บัญชีที่เลือกไม่อยู่ในรายการบัญชีปัจจุบัน กรุณาเลือกบัญชีใหม่");
   const s = memorySchedules.get(input.scheduleId);
   if (!s || s.ownerId !== ownerId) throw new Error("ไม่พบงวดชำระที่เลือก");
   if (s.status !== "pending") throw new Error("งวดนี้ถูกปิดยอดแล้ว");
