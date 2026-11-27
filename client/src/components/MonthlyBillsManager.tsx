@@ -27,7 +27,7 @@ export default function MonthlyBillsManager() {
   const updateBill = trpc.monthlyBills.update.useMutation({ onSuccess: async () => { await utils.monthlyBills.list.invalidate(); toast.success("แก้ไขบิลแล้ว"); reset(); } });
   const deleteBill = trpc.monthlyBills.delete.useMutation({ onSuccess: async () => { await utils.monthlyBills.list.invalidate(); toast.success("ลบบิลแล้ว"); } });
   const uploadReceipt = trpc.monthlyBills.uploadReceipt.useMutation();
-  const recordPayment = trpc.monthlyBills.recordPayment.useMutation({ onSuccess: async () => { await Promise.all([utils.monthlyBills.list.invalidate(), utils.monthlyBills.paymentHistory.invalidate()]); setPaymentBill(null); setReceiptFile(null); toast.success("บันทึกการชำระบิลแล้ว"); }, onError: error => toast.error(error.message) });
+  const recordPayment = trpc.monthlyBills.recordPayment.useMutation({ onSuccess: async () => { await Promise.all([utils.monthlyBills.list.invalidate(), utils.monthlyBills.paymentHistory.invalidate(), utils.sheets.getBalance.invalidate(), utils.sheets.listTransactions.invalidate()]); setPaymentBill(null); setReceiptFile(null); toast.success("บันทึกการชำระบิลแล้ว"); }, onError: error => toast.error(error.message) });
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
   const [paidAmount, setPaidAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState<"full" | "partial">("full");
