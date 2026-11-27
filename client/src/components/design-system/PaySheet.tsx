@@ -85,6 +85,8 @@ export const PaySheet: React.FC<PaySheetProps> = ({
       }
       await onConfirm({ paymentId, amount: numAmount, date, note: note.trim(), account, receipt });
       onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "บันทึกการชำระไม่สำเร็จ");
     } finally {
       setLoading(false);
     }
