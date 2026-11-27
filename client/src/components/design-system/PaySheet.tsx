@@ -3,6 +3,7 @@ import { X, CheckCircle2 } from "lucide-react";
 import { Money } from "./Money";
 import { Button } from "./Button";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 export interface PaySheetProps {
   open: boolean;
@@ -12,7 +13,7 @@ export interface PaySheetProps {
   defaultAmount: number;
   totalDue?: number;
   type?: "pay" | "receive";
-  onConfirm: (data: { amount: number; date: string; note: string; receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string } }) => Promise<void>;
+  onConfirm: (data: { amount: number; date: string; note: string; account: string; receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string } }) => Promise<void>;
 }
 
 export const PaySheet: React.FC<PaySheetProps> = ({
@@ -25,6 +26,9 @@ export const PaySheet: React.FC<PaySheetProps> = ({
   type = "receive",
   onConfirm,
 }) => {
+  const accountsQuery = trpc.sheets.getBalance.useQuery(undefined, { retry: 1 });
+  const accounts = accountsQuery.data?.accountBalances ?? [];
+  const [account, setAccount] = useState("");
   const [amount, setAmount] = useState<string>(String(defaultAmount || 0));
   const [paymentMode, setPaymentMode] = useState<"full" | "partial">("full");
   const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -35,6 +39,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
   useEffect(() => {
     if (open) {
       setAmount(String(defaultAmount || 0));
+      setAccount("");
       setPaymentMode("full");
       setDate(new Date().toISOString().slice(0, 10));
       setNote("");
@@ -49,11 +54,15 @@ export const PaySheet: React.FC<PaySheetProps> = ({
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) return;
     const dueAmount = Number(totalDue ?? defaultAmount);
-    if (type === "pay" && Math.round(numAmount * 100) > Math.round(dueAmount * 100)) {
+    if (!account || !accounts.some(item => item.name === account)) {
+      toast.error("กรุณาเลือกบัญชีจากรายการบัญชีที่เชื่อมต่อ");
+      return;
+    }
+    if (Math.round(numAmount * 100) > Math.round(dueAmount * 100)) {
       toast.error("ยอดชำระต้องไม่เกินยอดค่างวดคงเหลือ");
       return;
     }
-    if (type === "pay" && paymentMode === "full" && Math.round(numAmount * 100) !== Math.round(dueAmount * 100)) {
+    if (paymentMode === "full" && Math.round(numAmount * 100) !== Math.round(dueAmount * 100)) {
       setAmount(String(dueAmount));
       return;
     }
@@ -72,7 +81,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
         });
         receipt = { fileName: receiptFile.name, mimeType: receiptFile.type as "image/jpeg" | "image/png" | "image/webp" | "application/pdf", base64 };
       }
-      await onConfirm({ amount: numAmount, date, note: note.trim(), receipt });
+      await onConfirm({ amount: numAmount, date, note: note.trim(), account, receipt });
       onClose();
     } finally {
       setLoading(false);
@@ -114,7 +123,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="min-w-0 space-y-4">
-          {type === "pay" && (
+          {(
             <div className="space-y-2">
               <label className="block text-xs font-medium text-[#1C1917]">รูปแบบการชำระค่างวด *</label>
               <div className="grid grid-cols-2 gap-2">
@@ -131,6 +140,14 @@ export const PaySheet: React.FC<PaySheetProps> = ({
             </div>
           )}
           <div className="w-full min-w-0">
+            <label className="block text-xs font-medium text-[#1C1917] mb-1.5">บัญชีที่{type === "receive" ? "รับเงินเข้า" : "ใช้จ่ายออก"} *</label>
+            <select value={account} onChange={e => setAccount(e.target.value)} required disabled={accountsQuery.isLoading || accounts.length === 0} className="block w-full h-11 px-3.5 bg-white border border-[#1C1917]/15 rounded-[10px] text-sm text-[#1C1917]">
+              <option value="">{accountsQuery.isLoading ? "กำลังโหลดบัญชี..." : "-- เลือกบัญชี --"}</option>
+              {accounts.map(item => <option key={item.name} value={item.name}>{item.name} · ฿{Number(item.amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</option>)}
+            </select>
+            {!accountsQuery.isLoading && accounts.length === 0 && <p className="mt-1 text-[11px] text-rose-600">ไม่พบบัญชีจาก Google Sheets กรุณาตรวจสอบการเชื่อมต่อบัญชีก่อนทำรายการ</p>}
+          </div>
+          <div className="w-full min-w-0">
             <label className="block text-xs font-medium text-[#1C1917] mb-1.5">
               จำนวนเงินที่บันทึก (บาท) *
             </label>
@@ -141,8 +158,8 @@ export const PaySheet: React.FC<PaySheetProps> = ({
               required
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              max={type === "pay" ? (totalDue ?? defaultAmount) : undefined}
-              disabled={type === "pay" && paymentMode === "full"}
+              max={totalDue ?? defaultAmount}
+              disabled={paymentMode === "full"}
               className="block box-border min-w-0 w-full max-w-full h-11 px-3.5 bg-white border border-[#1C1917]/15 rounded-[10px] text-base font-mono font-semibold tabular-nums text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:ring-1 focus:ring-[#1C1917]"
             />
           </div>
