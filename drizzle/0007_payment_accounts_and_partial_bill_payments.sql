@@ -9,7 +9,7 @@ DEALLOCATE PREPARE payment_stmt;
 
 SET @ddl = IF(
   (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'monthly_bill_payments' AND COLUMN_NAME = 'accountName') = 0,
-  'ALTER TABLE `monthly_bill_payments` ADD COLUMN `accountName` varchar(160) NOT NULL DEFAULT ''''',
+  CONCAT('ALTER TABLE `monthly_bill_payments` ADD COLUMN `accountName` varchar(160) NOT NULL DEFAULT ', CHAR(39), CHAR(39)),
   'SELECT 1'
 );
 PREPARE payment_stmt FROM @ddl;
