@@ -13,7 +13,7 @@ export interface PaySheetProps {
   defaultAmount: number;
   totalDue?: number;
   type?: "pay" | "receive";
-  onConfirm: (data: { amount: number; date: string; note: string; account: string; receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string } }) => Promise<void>;
+  onConfirm: (data: { paymentId: string; amount: number; date: string; note: string; account: string; receipt?: { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string } }) => Promise<void>;
 }
 
 export const PaySheet: React.FC<PaySheetProps> = ({
@@ -29,6 +29,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
   const accountsQuery = trpc.sheets.getBalance.useQuery(undefined, { retry: 1 });
   const accounts = accountsQuery.data?.accountBalances ?? [];
   const [account, setAccount] = useState("");
+  const [paymentId, setPaymentId] = useState(crypto.randomUUID());
   const [amount, setAmount] = useState<string>(String(defaultAmount || 0));
   const [paymentMode, setPaymentMode] = useState<"full" | "partial">("full");
   const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -40,6 +41,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
     if (open) {
       setAmount(String(defaultAmount || 0));
       setAccount("");
+      setPaymentId(crypto.randomUUID());
       setPaymentMode("full");
       setDate(new Date().toISOString().slice(0, 10));
       setNote("");
@@ -81,7 +83,7 @@ export const PaySheet: React.FC<PaySheetProps> = ({
         });
         receipt = { fileName: receiptFile.name, mimeType: receiptFile.type as "image/jpeg" | "image/png" | "image/webp" | "application/pdf", base64 };
       }
-      await onConfirm({ amount: numAmount, date, note: note.trim(), account, receipt });
+      await onConfirm({ paymentId, amount: numAmount, date, note: note.trim(), account, receipt });
       onClose();
     } finally {
       setLoading(false);
