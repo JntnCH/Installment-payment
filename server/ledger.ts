@@ -95,6 +95,7 @@ function toLedgerTransaction(row: TransactionRow) {
     source: row.source,
     note: row.note ?? "",
     receiptKey: row.receiptKey ?? "",
+    account: row.accountName ?? "",
   };
 }
 
@@ -874,7 +875,7 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
   const syncPayment = async () => {
     const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(paidAt);
     const isIncoming = input.source === "ledger_creditor_collection";
-    const isGoods = input.source === "ledger_debtor_payment";
+    const isGoods = input.source === "installment_goods_payment";
     await incomeExpensesApiRequest("POST", "/api/transactions", {
       transactionId: input.paymentId,
       type: isIncoming ? "income" : "expense",
