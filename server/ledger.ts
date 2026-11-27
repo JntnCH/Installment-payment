@@ -882,7 +882,7 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
       type: isIncoming ? "income" : "expense",
       item: input.note || (isIncoming ? "รับชำระหนี้" : isGoods ? "ชำระค่างวดผ่อนสินค้า" : "ชำระหนี้สิน"),
       amount: input.paidAmount,
-      category: isIncoming ? "รับชำระหนี้" : isGoods ? "ผ่อนสินค้า" : "ชำระหนี้สิน",
+      category: "ทั่วไป",
       account: input.account,
       recorderName: "Installment Web",
       channel: "Installment Web",
