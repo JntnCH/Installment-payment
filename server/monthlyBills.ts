@@ -93,6 +93,10 @@ export async function recordMonthlyBillPayment(ownerId: number, input: { id: str
     timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(paidAt);
   const transactionId = `monthly-bill:${input.paymentId}`;
+  const [existingPaymentId] = await db.select().from(monthlyBillPayments).where(eq(monthlyBillPayments.id, input.paymentId)).limit(1);
+  if (existingPaymentId && (existingPaymentId.ownerId !== ownerId || existingPaymentId.billId !== bill.id || existingPaymentId.monthKey !== monthKey || Math.round(Number(existingPaymentId.paidAmount) * 100) !== Math.round(input.paidAmount * 100) || existingPaymentId.accountName !== input.account)) {
+    throw new Error("รหัสรายการชำระนี้ถูกใช้ไปแล้วด้วยข้อมูลอื่น กรุณาเริ่มรายการใหม่");
+  }
   const previousPayments = await db.select().from(monthlyBillPayments).where(and(eq(monthlyBillPayments.ownerId, ownerId), eq(monthlyBillPayments.billId, bill.id), eq(monthlyBillPayments.monthKey, monthKey)));
   const alreadyRecorded = previousPayments.find(payment => payment.id === input.paymentId);
   const paidBeforeCents = previousPayments.reduce((sum, payment) => sum + Math.round(Number(payment.paidAmount) * 100), 0) - (alreadyRecorded ? Math.round(Number(alreadyRecorded.paidAmount) * 100) : 0);
