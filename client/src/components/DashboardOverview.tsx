@@ -145,7 +145,7 @@ export default function DashboardOverview({
       void utils.ledger.getStats.invalidate();
       toast.success("บันทึกการรับชำระเงินเรียบร้อยแล้ว");
     } catch (err: any) {
-      toast.error(`เกิดข้อผิดพลาด: ${err.message}`);
+      throw new Error(`เกิดข้อผิดพลาด: ${err.message}`);
     }
   };
 
