@@ -50,6 +50,7 @@ export const transactionInputSchema = z.object({
 });
 
 export const schedulePaymentInputSchema = z.object({
+  paymentId: z.string().uuid(),
   scheduleId: z.string().trim().min(1).max(64),
   paidAmount: z.number().finite().positive(),
   paidAt: z.coerce.date().optional(),
