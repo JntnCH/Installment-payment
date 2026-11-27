@@ -140,6 +140,24 @@ export const monthlyBillSyncOutbox = mysqlTable("monthly_bill_sync_outbox", {
 }));
 
 
+export const monthlyBillPayments = mysqlTable("monthly_bill_payments", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  billId: varchar("billId", { length: 64 }).notNull().references(() => monthlyBills.id, { onDelete: "cascade" }),
+  monthKey: varchar("monthKey", { length: 7 }).notNull(),
+  paidAmount: decimal("paidAmount", { precision: 15, scale: 2 }).notNull(),
+  paidAt: timestamp("paidAt").notNull(),
+  receiptKey: varchar("receiptKey", { length: 512 }),
+  transactionId: varchar("transactionId", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({
+  ownerBillMonthUnique: uniqueIndex("monthly_bill_payment_owner_bill_month_uq").on(table.ownerId, table.billId, table.monthKey),
+  ownerPaidAtIdx: index("monthly_bill_payment_owner_paid_at_idx").on(table.ownerId, table.paidAt),
+  billMonthIdx: index("monthly_bill_payment_bill_month_idx").on(table.billId, table.monthKey),
+}));
+
+
 export const googleSheetsConnections = mysqlTable("google_sheets_connections", {
   userId: int("userId").primaryKey().references(() => users.id, { onDelete: "cascade" }),
   refreshTokenEncrypted: text("refreshTokenEncrypted").notNull(),

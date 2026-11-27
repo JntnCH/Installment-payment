@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feature/debtor-daily-monthly-payment, feature/google-drive-receipt-storage]
+    branches: [main, feature/debtor-daily-monthly-payment, feature/google-drive-receipt-storage, feature/monthly-bill-payment-history]
 
 permissions:
   contents: read
