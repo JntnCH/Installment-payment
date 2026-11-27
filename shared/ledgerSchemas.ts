@@ -55,6 +55,7 @@ export const schedulePaymentInputSchema = z.object({
   source: z.string().trim().max(64).optional().default("manual"),
   note: z.string().trim().max(2_000).optional().default(""),
   receiptKey: z.string().max(512).optional(),
+  account: z.string().trim().min(1).max(160),
 });
 
 export const ledgerIdInputSchema = z.object({
