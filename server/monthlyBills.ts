@@ -74,7 +74,7 @@ export async function uploadMonthlyBillReceipt(ownerId: number, billId: string, 
   return { receiptKey: uploaded.fileId };
 }
 
-export async function recordMonthlyBillPayment(ownerId: number, input: { id: string; paidAmount: number; paidAt: string; receiptKey?: string }) {
+export async function recordMonthlyBillPayment(ownerId: number, input: { id: string; paymentId: string; paidAmount: number; paidAt: string; account: string; receiptKey?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
   const rows = await db.select().from(monthlyBills).where(and(
@@ -92,11 +92,17 @@ export async function recordMonthlyBillPayment(ownerId: number, input: { id: str
   const paidDate = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(paidAt);
-  const transactionId = `monthly-bill:${bill.id}:${monthKey}`;
+  const transactionId = `monthly-bill:${input.paymentId}`;
+  const previousPayments = await db.select().from(monthlyBillPayments).where(and(eq(monthlyBillPayments.ownerId, ownerId), eq(monthlyBillPayments.billId, bill.id), eq(monthlyBillPayments.monthKey, monthKey)));
+  const alreadyRecorded = previousPayments.find(payment => payment.id === input.paymentId);
+  const paidBeforeCents = previousPayments.reduce((sum, payment) => sum + Math.round(Number(payment.paidAmount) * 100), 0) - (alreadyRecorded ? Math.round(Number(alreadyRecorded.paidAmount) * 100) : 0);
+  const paidTotalCents = paidBeforeCents + Math.round(input.paidAmount * 100);
+  const billAmountCents = Math.round(Number(bill.amount) * 100);
+  if (paidTotalCents > billAmountCents) throw new Error("ยอดชำระสะสมเกินยอดบิล กรุณาตรวจสอบยอดคงเหลือ");
 
   await db.transaction(async tx => {
     await tx.insert(monthlyBillPayments).values({
-      id: crypto.randomUUID(),
+      id: input.paymentId,
       ownerId,
       billId: bill.id,
       monthKey,
@@ -104,18 +110,20 @@ export async function recordMonthlyBillPayment(ownerId: number, input: { id: str
       paidAt,
       receiptKey: input.receiptKey ?? null,
       transactionId,
+      accountName: input.account,
     }).onDuplicateKeyUpdate({
       set: {
         paidAmount: input.paidAmount.toFixed(2),
         paidAt,
         receiptKey: input.receiptKey ?? null,
         transactionId,
+        accountName: input.account,
         updatedAt: new Date(),
       },
     });
     await tx.update(monthlyBills).set({
-      status: "paid",
-      paidAmount: input.paidAmount.toFixed(2),
+      status: paidTotalCents >= billAmountCents ? "paid" : "pending",
+      paidAmount: (paidTotalCents / 100).toFixed(2),
       paidAt,
       receiptKey: input.receiptKey ?? null,
     }).where(and(eq(monthlyBills.ownerId, ownerId), eq(monthlyBills.id, input.id)));
@@ -128,7 +136,7 @@ export async function recordMonthlyBillPayment(ownerId: number, input: { id: str
       item: bill.billName,
       amount: input.paidAmount,
       category: "บิลรายเดือน",
-      account: "เงินสด",
+      account: input.account,
       recorderName: "Installment Web",
       channel: "Installment Web",
       date: paidDate,
