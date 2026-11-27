@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Trash2, Save, Bot, Tags, FolderTree } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Save, Bot, Tags, FolderTree, Sheet } from "lucide-react";
 
-type Section = "intents" | "entities" | "categories";
+type Section = "google" | "intents" | "entities" | "categories";
 
 export default function SystemSettings() {
   const [section, setSection] = useState<Section>("intents");
@@ -17,9 +17,19 @@ export default function SystemSettings() {
   const [entityTypeName, setEntityTypeName] = useState("");
   const [newEntityType, setNewEntityType] = useState("");
   const [categoryType, setCategoryType] = useState<"income" | "expense">("expense");
+  const [spreadsheetId, setSpreadsheetId] = useState("");
 
   const utils = trpc.useUtils();
   const configQuery = trpc.systemSettings.configured.useQuery();
+  const googleStatus = trpc.monthlyBills.googleStatus.useQuery();
+  const configureSheets = trpc.monthlyBills.configureGoogleSpreadsheet.useMutation({
+    onSuccess: async () => {
+      toast.success("เชื่อมต่อ Spreadsheet เรียบร้อย");
+      setSpreadsheetId("");
+      await Promise.all([utils.monthlyBills.googleStatus.invalidate(), utils.sheets.getBalance.invalidate(), utils.sheets.listTransactions.invalidate()]);
+    },
+    onError: error => toast.error(error.message),
+  });
   const statusQuery = trpc.systemSettings.dialogflowStatus.useQuery(undefined, { enabled: !!configQuery.data?.configured });
   const intentsQuery = trpc.systemSettings.intents.useQuery(undefined, { enabled: !!configQuery.data?.configured && section === "intents" });
   const entitiesQuery = trpc.systemSettings.entityTypes.useQuery(undefined, { enabled: !!configQuery.data?.configured && section === "entities" });
@@ -82,6 +92,7 @@ export default function SystemSettings() {
   };
 
   const tabs = [
+    { id: "google" as const, label: "Google Sheets", icon: Sheet },
     { id: "intents" as const, label: "Intents", icon: Bot },
     { id: "entities" as const, label: "Entities", icon: Tags },
     { id: "categories" as const, label: "Categories", icon: FolderTree },
@@ -120,6 +131,35 @@ export default function SystemSettings() {
           </button>;
         })}
       </div>
+
+      {section === "google" && (
+        <section className="max-w-2xl rounded-xl border bg-white p-4 space-y-4">
+          <div>
+            <h2 className="font-semibold">การเชื่อมต่อ Google Sheets</h2>
+            <p className="mt-1 text-sm text-slate-500">จัดการบัญชี Google และ Spreadsheet จากหน้านี้ ไม่แสดงกล่องเชื่อมต่อซ้ำในหน้ารายรับ–รายจ่าย</p>
+          </div>
+          <div className="rounded-lg border bg-slate-50 p-3">
+            <div className={googleStatus.data?.connected ? "font-medium text-emerald-700" : "font-medium text-amber-700"}>
+              {googleStatus.isLoading ? "กำลังตรวจสอบ..." : googleStatus.data?.connected ? "เชื่อมต่อ Google แล้ว" : "ยังไม่ได้เชื่อมต่อ Google"}
+            </div>
+            <p className="mt-1 break-all text-sm text-slate-600">{googleStatus.data?.connectedEmail || "ไม่พบอีเมลบัญชี Google"}</p>
+            <p className="mt-1 text-xs text-slate-500">{googleStatus.data?.configured ? "Spreadsheet พร้อมใช้งาน" : "ยังไม่ได้กำหนด Spreadsheet"}</p>
+          </div>
+          <button type="button" onClick={() => window.location.assign("/api/auth/google?intent=link")} className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50">
+            {googleStatus.data?.connected ? "เชื่อมต่อ Google ใหม่" : "เชื่อมต่อ Google"}
+          </button>
+          {!googleStatus.data?.configured && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium" htmlFor="google-spreadsheet-id">Google Spreadsheet ID</label>
+              <input id="google-spreadsheet-id" value={spreadsheetId} onChange={event => setSpreadsheetId(event.target.value)} placeholder="วาง Google Spreadsheet ID" className="h-10 w-full rounded-lg border px-3 text-sm" />
+              <button type="button" disabled={!googleStatus.data?.connected || spreadsheetId.trim().length < 10 || configureSheets.isPending} onClick={() => configureSheets.mutate({ spreadsheetId: spreadsheetId.trim() })} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                {configureSheets.isPending ? "กำลังตรวจสอบ..." : "บันทึก Spreadsheet"}
+              </button>
+            </div>
+          )}
+          <p className="text-xs text-slate-500">ใช้สิทธิ์ Google ของบัญชีที่เชื่อมต่อเท่านั้น ไม่ใช้ Spreadsheet ร่วมระหว่างผู้ใช้</p>
+        </section>
+      )}
 
       {section === "intents" && (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,1fr)]">
