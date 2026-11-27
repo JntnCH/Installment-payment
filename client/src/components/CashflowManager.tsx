@@ -36,13 +36,10 @@ export default function CashflowManager() {
     { retry: 1 },
   );
   const createSheetsTx = trpc.sheets.createTransaction.useMutation();
-  const googleStatus = trpc.monthlyBills.googleStatus.useQuery();
-  const configureSheets = trpc.monthlyBills.configureGoogleSpreadsheet.useMutation();
   const utils = trpc.useUtils();
 
   const [filterType, setFilterType] = useState<"all" | "in" | "out">("all");
   const [modalOpen, setModalOpen] = useState(false);
-  const [spreadsheetId, setSpreadsheetId] = useState("");
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [txForm, setTxForm] = useState({
     date: new Date().toISOString().slice(0, 10),
@@ -148,7 +145,9 @@ export default function CashflowManager() {
       });
       setReceiptFile(null);
     } catch (err: any) {
-      toast.error(`บันทึกไม่สำเร็จ: ${err.message}`);
+      const details = err?.data?.zodError?.fieldErrors;
+      const fieldMessage = details ? Object.entries(details).map(([field, messages]) => `${field}: ${(messages as string[]).join(", ")}`).join(" | ") : "";
+      toast.error(`บันทึกไม่สำเร็จ: ${fieldMessage || err?.message || "ไม่ทราบสาเหตุ"}`);
     }
   };
 
@@ -173,34 +172,6 @@ export default function CashflowManager() {
           </Button>
         }
       />
-
-      <section className="rounded-2xl border border-[#1C1917]/10 bg-[#FFFCF8] p-4 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <div className="font-semibold text-sm">เชื่อมต่อ Google Sheets ส่วนตัว</div>
-            <p className="text-xs text-[#78716C] mt-1">
-              {googleStatus.data?.connected ? `เชื่อมต่อแล้ว · ${googleStatus.data.connectedEmail || "Google account"}` : "ยังไม่ได้เชื่อมต่อบัญชี Google"}
-              {googleStatus.data?.configured ? " · พร้อมใช้งาน" : " · กรุณาระบุ Spreadsheet ID"}
-            </p>
-          </div>
-          <Button type="button" variant="secondary" size="sm" onClick={() => window.location.assign("/api/auth/google?intent=link")}>
-            {googleStatus.data?.connected ? "เชื่อมต่อ Google ใหม่" : "เชื่อมต่อ Google"}
-          </Button>
-        </div>
-        {!googleStatus.data?.configured && <div className="flex flex-col sm:flex-row gap-2">
-          <input value={spreadsheetId} onChange={event => setSpreadsheetId(event.target.value)} placeholder="วาง Google Spreadsheet ID" className="min-w-0 flex-1 h-10 px-3 border border-[#1C1917]/15 rounded-[10px] text-sm" />
-          <Button type="button" size="sm" disabled={!googleStatus.data?.connected || configureSheets.isPending || spreadsheetId.trim().length < 10} onClick={async () => {
-            try {
-              await configureSheets.mutateAsync({ spreadsheetId: spreadsheetId.trim() });
-              await Promise.all([utils.monthlyBills.googleStatus.invalidate(), utils.sheets.getBalance.invalidate(), utils.sheets.listTransactions.invalidate()]);
-              toast.success("เชื่อมต่อ Spreadsheet เรียบร้อย");
-            } catch (error) { toast.error(error instanceof Error ? error.message : "ตั้งค่า Spreadsheet ไม่สำเร็จ"); }
-          }}>
-            {configureSheets.isPending ? "กำลังตรวจสอบ..." : "บันทึก Spreadsheet"}
-          </Button>
-        </div>}
-        <p className="text-[11px] text-[#78716C]">ใช้สิทธิ์ Google ของบัญชีที่เชื่อมต่อเท่านั้น ไม่ใช้ Spreadsheet ร่วมระหว่างผู้ใช้</p>
-      </section>
 
       {errorMsg ? (
         <div className="rounded-2xl border border-[#A33B2B]/30 bg-[#A33B2B]/5 p-4 text-sm text-[#A33B2B]">
