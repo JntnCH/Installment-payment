@@ -48,7 +48,7 @@ export default function MonthlyBillsManager() {
   const getCurrentMonthPayments = (billId: string) => payments.filter(payment => payment.billId === billId && payment.monthKey === currentMonth);
   const getCurrentMonthPaid = (billId: string) => getCurrentMonthPayments(billId).reduce((sum, payment) => sum + Number(payment.paidAmount), 0);
   const getCurrentMonthOutstanding = (bill: Bill) => Math.max(0, Number(bill.amount) - getCurrentMonthPaid(bill.id));
-  const getCurrentMonthPayment = (billId: string) => getCurrentMonthPayments(billId).slice(-1)[0];
+  const getCurrentMonthPayment = (billId: string) => getCurrentMonthPayments(billId)[0];
   const totalPending = useMemo(() => bills.reduce((sum, bill) => sum + Math.max(0, Number(bill.amount) - payments.filter(payment => payment.billId === bill.id && payment.monthKey === currentMonth).reduce((paid, payment) => paid + Number(payment.paidAmount), 0)), 0), [bills, payments, currentMonth]);
   const submitPayment = async (event: React.FormEvent) => {
     event.preventDefault();
