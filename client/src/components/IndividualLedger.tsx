@@ -1036,7 +1036,7 @@ export default function IndividualLedger({
                                         const rawScheduleId = tx.transactionId.replace("schedule:", "");
                                         setActivePaySchedule({
                                           scheduleId: rawScheduleId,
-                                          amount: displayAmount,
+                                          amount: Math.max(0, displayAmount - Number(tx.paidAmount || 0)),
                                           installmentNo: Number(tx.installmentNo || 0),
                                           contractTitle: selectedContract.title,
                                         });
