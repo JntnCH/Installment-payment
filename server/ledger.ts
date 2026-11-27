@@ -874,7 +874,7 @@ export async function markSchedulePaid(ownerId: number, input: SchedulePaymentIn
   const paidAt = input.paidAt ?? new Date();
   const syncPayment = async () => {
     const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(paidAt);
-    const isIncoming = input.source === "ledger_creditor_collection";
+    const isIncoming = input.source === "ledger_creditor_collection" || input.source === "command_center";
     const isGoods = input.source === "installment_goods_payment";
     await incomeExpensesApiRequest("POST", "/api/transactions", {
       transactionId: input.paymentId,
