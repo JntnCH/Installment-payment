@@ -430,7 +430,7 @@ export default function IndividualLedger({
         setSelectedPartyId(res.partyId);
       }
     } catch (err: any) {
-      throw new Error(`เกิดข้อผิดพลาด: ${err.message}`);
+      toast.error(`เกิดข้อผิดพลาด: ${err.message}`);
     }
   };
 
@@ -553,7 +553,7 @@ export default function IndividualLedger({
       toast.success(isDebtor ? "บันทึกการรับชำระเงินคืน (รับเข้า) สำเร็จ" : "บันทึกการจ่ายเงินกู้ยืม (จ่ายออก) สำเร็จ");
       setActivePaySchedule(null);
     } catch (err: any) {
-      toast.error(`เกิดข้อผิดพลาด: ${err.message}`);
+      throw new Error(`เกิดข้อผิดพลาด: ${err.message}`);
     }
   };
 
