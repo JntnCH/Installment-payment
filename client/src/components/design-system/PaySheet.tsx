@@ -95,9 +95,9 @@ export const PaySheet: React.FC<PaySheetProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/40 backdrop-blur-xs animate-in fade-in duration-200 sm:items-center sm:p-4">
       <div
-        className="w-full min-w-0 max-w-md box-border bg-[#FFFCF8] rounded-3xl border border-[#1C1917]/10 p-4 sm:p-6 shadow-xl relative animate-in zoom-in-95 duration-150"
+        className="box-border h-[100dvh] w-full min-w-0 max-w-none overflow-y-auto overscroll-contain touch-pan-y rounded-none border-0 bg-[#FFFCF8] p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl relative animate-in fade-in duration-150 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-3xl sm:border sm:border-[#1C1917]/10 sm:p-6 sm:zoom-in-95"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
